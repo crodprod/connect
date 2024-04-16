@@ -1,1 +1,4 @@
 flet==0.21.2
+python-dotenv==1.0.1
+mysql-connector-python==8.3.0
+aiogram==3.4.1
