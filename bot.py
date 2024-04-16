@@ -53,7 +53,7 @@ async def is_registered(telegram_id: int):
     db.connect()
     result = db.execute_query(query, (telegram_id, telegram_id, telegram_id, telegram_id,))
     db.disconnect()
-    print("REGISTERED:", result)
+    # print("REGISTERED:", result)
     if result is None:
         return False
     return True
@@ -120,7 +120,7 @@ async def send_hello(telegram_id: int, table: str):
 
 @dp.message(CommandStart(deep_link=True, magic=F.args.regexp(re.compile(r'(children|mentors|teachers|admins|tasker)_\w+'))))
 async def deep_linking(message: Message, command: CommandObject):
-    print(command.args)
+    # print(command.args)
     target = command.args.split("_")[0]
     pass_phrase = command.args.split("_")[1]
 
@@ -143,7 +143,7 @@ async def deep_linking(message: Message, command: CommandObject):
         tasker_users = load_config_file(path)
         fl = False
         for user in tasker_users:
-            print(user)
+            # print(user)
             if user['login'] == pass_phrase:
                 fl = True
                 user['tid'] = message.chat.id
