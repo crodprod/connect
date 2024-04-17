@@ -1,9 +1,23 @@
-from aiogram import types
 from aiogram.utils import keyboard
+from bot_elements.lexicon import base_crod_url
+from bot_elements.keyboard_builders import builder_teachers, builder_mentors
 
 tasker_kb = keyboard.InlineKeyboardBuilder(
     markup=[
-        [keyboard.InlineKeyboardButton(text="Открыть Таскер", url="https://crodconnect.ddns.net/tasker")]
+        [keyboard.InlineKeyboardButton(text="Открыть Таскер 🗒️", url=f"{base_crod_url}/tasker")]
+    ]
+)
+
+reboot_bot_kb = keyboard.InlineKeyboardBuilder(
+    markup=[
+        [keyboard.InlineKeyboardButton(text="Перезагрузить ⚡", callback_data="admins_rebootbot")]
+    ]
+)
+
+radio_kb = keyboard.InlineKeyboardBuilder(
+    markup=[
+        [keyboard.InlineKeyboardButton(text="🟢 Запустить", callback_data="radio_on")],
+        [keyboard.InlineKeyboardButton(text="🔴 Остановить", callback_data="radio_off")]
     ]
 )
 
@@ -11,8 +25,8 @@ kb_hello = {
     'children': keyboard.InlineKeyboardBuilder(
         markup=[
             [keyboard.InlineKeyboardButton(
-                text="Вперёд! 🔥",
-                callback_data="234234"
+                text="Погнали! 🔥",
+                callback_data="firststart"
             )]
 
         ]
@@ -20,8 +34,8 @@ kb_hello = {
     'mentors': keyboard.InlineKeyboardBuilder(
         markup=[
             [keyboard.InlineKeyboardButton(
-                text="Начать 🏃‍♂️",
-                callback_data="4324324"
+                text="Главное меню 🏃‍♂️",
+                callback_data="firststart"
             )]
 
         ]
@@ -29,8 +43,8 @@ kb_hello = {
     'teachers': keyboard.InlineKeyboardBuilder(
         markup=[
             [keyboard.InlineKeyboardButton(
-                text="Начать 🧑‍🏫",
-                callback_data="324234"
+                text="Главное меню 🧑‍🏫",
+                callback_data="firststart"
             )],
 
         ]
@@ -38,8 +52,8 @@ kb_hello = {
     'admins': keyboard.InlineKeyboardBuilder(
         markup=[
             [keyboard.InlineKeyboardButton(
-                text="Начать 🧑‍💻",
-                callback_data="23423432432"
+                text="Главное меню 🧑‍💻",
+                callback_data="firststart"
             )]
         ]
     ),
@@ -53,25 +67,16 @@ kb_main = {
             [keyboard.InlineKeyboardButton(text="Радио 📻", callback_data="children_radio")],
         ]
     ),
-    'mentors': keyboard.InlineKeyboardBuilder(
-        markup=[
-            [keyboard.InlineKeyboardButton(text="Список группы 📋", callback_data="mentors_grouplist")],
-            [keyboard.InlineKeyboardButton(text="Обратная связь 💬", callback_data="mentors_feedback")],
-            [keyboard.InlineKeyboardButton(text="QR-коды #️⃣", callback_data="mentors_qrs")],
-            [keyboard.InlineKeyboardButton(text="Дни рождения 🎂", callback_data="mentors_births")],
-        ]
-    ),
-    'teachers': keyboard.InlineKeyboardBuilder(
-        markup=[
-            [keyboard.InlineKeyboardButton(text="Список группы 📋", callback_data="teachers_grouplist")],
-            [keyboard.InlineKeyboardButton(text="Обратная связь 💬", callback_data="teachers_feedback")],
-        ]
-    ),
+    'mentors': builder_mentors,
+    'teachers': builder_teachers,
     'admins': keyboard.InlineKeyboardBuilder(
         markup=[
             [keyboard.InlineKeyboardButton(text="Обратная связь 💬", callback_data="admins_feedback")],
             [keyboard.InlineKeyboardButton(text="Статистика 🎂", callback_data="admins_statistics")],
+            [keyboard.InlineKeyboardButton(text="Открыть Connect", url=f"{base_crod_url}/connect")],
         ]
     ),
     None: None
 }
+
+
