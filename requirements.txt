@@ -2,3 +2,5 @@ flet==0.21.2
 python-dotenv==1.0.1
 mysql-connector-python==8.3.0
 aiogram==3.4.1
+docxtpl==0.16.8
+docx2pdf==0.1.8
