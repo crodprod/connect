@@ -7,21 +7,24 @@ import re
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters.command import Command, CommandStart, CommandObject
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
-from aiogram.utils import markdown
+from aiogram.utils import markdown, keyboard
 
 from dotenv import load_dotenv
 
-from bot_elements.callback_factory import TeachersCallbackFactory, MentorsCallbackFactory
+from bot_elements.callback_factory import TeachersCallbackFactory, MentorsCallbackFactory, ChildrenCallbackFactory, RadioRequestCallbackFactory
 from bot_elements.database import DataBase
 from bot_elements.lexicon import lexicon
 from bot_elements.keyboards import kb_hello, kb_main, tasker_kb, reboot_bot_kb, radio_kb
+from bot_elements.states import Radio, Feedback
 from functions import load_config_file, update_config_file
 from wording.wording import get_grouplist
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 current_directory = os.path.dirname(os.path.abspath(__file__))
+config = load_config_file('config.json')
 
 bot = Bot(token=os.getenv('BOT_TOKEN'), parse_mode="MarkdownV2")
 dp = Dispatcher()
@@ -32,6 +35,13 @@ db = DataBase(
     password=os.getenv('DB_PASSWORD'),
     database=os.getenv('DB_NAME'),
 )
+
+statuses = {
+    'feedback': False,
+    'modules_record': False,
+    'radio': True
+}
+radio_request_user_list = []
 
 months = {
     1: "января",
@@ -435,6 +445,132 @@ async def callbacks_teachers(callback: types.CallbackQuery, callback_data: Teach
                     text="Обратной связи за сегодняшний день ещё нет, попробуйте позже",
                     show_alert=True
                 )
+    else:
+        await callback.answer(
+            text="⛔ Действие недоступно",
+            show_alert=True
+        )
+
+
+@dp.message(Radio.request_text)
+async def radio_text_sended(message: Message, state: FSMContext):
+    await state.clear()
+    if message.text == "/start":
+        await cmd_start(message)
+    else:
+        builder_approve_radio = keyboard.InlineKeyboardBuilder()
+        builder_approve_radio.button(text="🟢 Принять", callback_data=RadioRequestCallbackFactory(child_id=message.from_user.id, action="accept"))
+        builder_approve_radio.button(text="🔴 Отклонить", callback_data=RadioRequestCallbackFactory(child_id=message.from_user.id, action="decline"))
+        builder_approve_radio.adjust(1)
+        await bot.send_message(
+            chat_id=os.getenv('ID_GROUP_RADIO'),
+            text="*Новая заявка*"
+                 f"\n\n{message.text.strip()}",
+            reply_markup=builder_approve_radio.as_markup()
+        )
+        await message.answer(
+            text="*Твоя заявка отправлена и ждёт подтверждения*"
+                 f"\n\n{message.text.strip()}",
+            reply_markup=kb_hello['children'].as_markup()
+        )
+        radio_request_user_list.append(message.from_user.id)
+
+
+@dp.callback_query(RadioRequestCallbackFactory.filter())
+async def callbacks_radio(callback: types.CallbackQuery, callback_data: RadioRequestCallbackFactory, state: FSMContext):
+    child_id = callback_data.child_id
+    action = callback_data.action
+    radio_request_user_list.remove(child_id)
+    await callback.message.delete_reply_markup()
+    if action == 'accept':
+        text = "📨*Тук\-тук, новое сообщение*" \
+               "\n\nТвоя заявка на радио обработана, жди в эфире уже совсем скоро\!"
+        status = callback.message.text + "\n\n🟢 Принято"
+    elif action == 'decline':
+        text = "📨*Тук\-тук, новое сообщение*" \
+               "\n\n*К сожалению, твоя заявка отклонена, возможно она не прошла цензуру, но ты можешь отправить новую, пока наше радио в эфире*"
+        status = callback.message.text + "\n\n🔴 Отклонено"
+
+    await callback.message.edit_text(callback.message.text + status)
+    await bot.send_message(
+        chat_id=child_id,
+        text=text
+    )
+
+
+@dp.callback_query(ChildrenCallbackFactory.filter())
+async def callbacks_children(callback: types.CallbackQuery, callback_data: ChildrenCallbackFactory, state: FSMContext):
+    action = callback_data.action
+    user_info = await get_user_info(callback.from_user.id, 'children')
+    if user_info['status'] == 'active':
+
+        if action == "modules":
+            query = "SELECT * FROM modules_records WHERE child_id = %s"
+            db.connect()
+            modules_records_list = db.execute_query(query, (user_info['id'],), many=True)
+            if len(modules_records_list) > 0:
+                await callback.message.delete()
+                if len(modules_records_list) == config['modules_count']:
+                    query = "SELECT * FROM modules WHERE id IN (SELECT module_id FROM modules_records WHERE child_id = %s)"
+                    recorded_modules_info = db.execute_query(query, (user_info['id'],), many=True)
+                    text = "*Твои образовательные модули*\n\n"
+                    for index, module in enumerate(recorded_modules_info):
+                        query = "SELECT name FROM teachers WHERE module_id = %s"
+                        teacher_name = db.execute_query(query, (module['id'],))['name']
+                        text += f"{index + 1}\. «{module['name']}»" \
+                                f"\n🧑‍🏫 {teacher_name}" \
+                                f"\n📍 {module['location']}"
+
+                    await callback.message.answer(
+                        text=text,
+                        reply_markup=kb_hello['children'].as_markup()
+                    )
+                else:
+                    # Не на все модули записался
+                    pass
+            else:
+                if statuses['modules_record']:
+                    pass
+                else:
+                    await callback.answer(
+                        text="Запись на образователи модули пока закрыта, как только она начнётся, мы пришлём тебе сообщение",
+                        show_alert=True
+                    )
+
+        elif action == "feedback":
+            if statuses['feedback']:
+                pass
+            else:
+                await callback.answer(
+                    text="Сейчас мы не собираем обратную связь, но как только начнём, обязатаельно пришлём тебе сообщение",
+                    show_alert=True
+                )
+
+        elif action == "radio":
+            if statuses['radio']:
+                if user_info['telegram_id'] not in radio_request_user_list:
+                    await callback.message.delete()
+                    await state.set_state(Radio.request_text)
+                    await callback.message.answer(
+                        text="*Радио ждёт именно тебя\!*"
+                             "\n\nОтправь название песни, чтобы мы включили её на нашем радио " \
+                             "или напиши пожелание, которое мы озвучим в прямом эфире\! \(не забудь указать, кому адресовано пожелание\)" \
+                             "\n\nЧтобы вернуться назад, отправь /start" \
+                             "\n\n_Все заявки проходят проверку на цензуру, поэтому не все песни могут прозвучать в эфире_"
+                    )
+
+                else:
+                    await callback.answer(
+                        text="У тебя уже есть активная заявка на радио. Подожди, пока мы её обработаем, чтобы отправить новую",
+                        show_alert=True
+                    )
+
+            else:
+                await callback.answer(
+                    text="Сейчас наше радио не работает, как только мы будем в эфире, тебе придёт уведомление",
+                    show_alert=True
+                )
+
     else:
         await callback.answer(
             text="⛔ Действие недоступно",

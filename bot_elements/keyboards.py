@@ -1,6 +1,6 @@
 from aiogram.utils import keyboard
 from bot_elements.lexicon import base_crod_url
-from bot_elements.keyboard_builders import builder_teachers, builder_mentors
+from bot_elements.keyboard_builders import builder_teachers, builder_mentors, builder_children, builder_admins
 
 tasker_kb = keyboard.InlineKeyboardBuilder(
     markup=[
@@ -25,7 +25,7 @@ kb_hello = {
     'children': keyboard.InlineKeyboardBuilder(
         markup=[
             [keyboard.InlineKeyboardButton(
-                text="Погнали! 🔥",
+                text="Главное меню 🔥",
                 callback_data="firststart"
             )]
 
@@ -60,22 +60,10 @@ kb_hello = {
 }
 
 kb_main = {
-    'children': keyboard.InlineKeyboardBuilder(
-        markup=[
-            [keyboard.InlineKeyboardButton(text="Образовательные модули 💡", callback_data="children_modules")],
-            [keyboard.InlineKeyboardButton(text="Обратная связь 💬", callback_data="children_feedback")],
-            [keyboard.InlineKeyboardButton(text="Радио 📻", callback_data="children_radio")],
-        ]
-    ),
+    'children': builder_children,
     'mentors': builder_mentors,
     'teachers': builder_teachers,
-    'admins': keyboard.InlineKeyboardBuilder(
-        markup=[
-            [keyboard.InlineKeyboardButton(text="Обратная связь 💬", callback_data="admins_feedback")],
-            [keyboard.InlineKeyboardButton(text="Статистика 🎂", callback_data="admins_statistics")],
-            [keyboard.InlineKeyboardButton(text="Открыть Connect", url=f"{base_crod_url}/connect")],
-        ]
-    ),
+    'admins': builder_admins,
     None: None
 }
 

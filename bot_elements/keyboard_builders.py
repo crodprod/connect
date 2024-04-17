@@ -1,6 +1,7 @@
 from aiogram.utils import keyboard
 
-from bot_elements.callback_factory import TeachersCallbackFactory, MentorsCallbackFactory
+from bot_elements.callback_factory import TeachersCallbackFactory, MentorsCallbackFactory, ChildrenCallbackFactory, AdminsCallbackFactory
+from bot_elements.lexicon import base_crod_url
 
 builder_teachers = keyboard.InlineKeyboardBuilder()
 builder_teachers.button(text="Список группы 📋", callback_data=TeachersCallbackFactory(action="grouplist"))
@@ -13,3 +14,16 @@ builder_mentors.button(text="Обратная связь 💬", callback_data=Me
 builder_mentors.button(text="QR-коды #️⃣", callback_data=MentorsCallbackFactory(action="qrs"))
 builder_mentors.button(text="Дни рождения 🎂", callback_data=MentorsCallbackFactory(action="births"))
 builder_mentors.adjust(1)
+
+builder_children = keyboard.InlineKeyboardBuilder()
+builder_children.button(text="Радио 📻", callback_data=ChildrenCallbackFactory(action="radio"))
+builder_children.button(text="Обратная связь 💬", callback_data=ChildrenCallbackFactory(action="feedback"))
+builder_children.button(text="Образовательные модули 💡", callback_data=ChildrenCallbackFactory(action="modules"))
+builder_children.adjust(2)
+
+builder_admins = keyboard.InlineKeyboardBuilder()
+builder_admins.button(text="Обратная связь 💬", callback_data=AdminsCallbackFactory(action="feedback"))
+builder_admins.button(text="Статистика 📋", callback_data=AdminsCallbackFactory(action="statistics"))
+builder_admins.button(text="Открыть Connect 💡", url=f"{base_crod_url}/connect")
+builder_admins.button(text="Документы 📋", callback_data=AdminsCallbackFactory(action="docs"))
+builder_admins.adjust(1)

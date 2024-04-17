@@ -8,3 +8,16 @@ class TeachersCallbackFactory(CallbackData, prefix="teachers"):
 
 class MentorsCallbackFactory(CallbackData, prefix="mentors"):
     action: str
+
+
+class ChildrenCallbackFactory(CallbackData, prefix="children"):
+    action: str
+
+
+class AdminsCallbackFactory(CallbackData, prefix="children"):
+    action: str
+
+
+class RadioRequestCallbackFactory(CallbackData, prefix="radio"):
+    child_id: int
+    action: str
