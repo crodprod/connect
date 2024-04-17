@@ -300,8 +300,6 @@ async def handle_setup_commands(message: types.Message):
                 text="*Некорректная команда* \n\nДля изменения беседы введите"
                      "\n/setup radio\|errors\|modules\|fback"
             )
-    else:
-        print("ноунейм какой-то")
 
 
 @dp.message(Command("radio"))
@@ -328,7 +326,6 @@ async def send_random_value(callback: types.CallbackQuery):
 async def callbacks_teachers(callback: types.CallbackQuery, callback_data: MentorsCallbackFactory):
     action = callback_data.action
     user_info = await get_user_info(callback.from_user.id, 'mentors')
-    print(user_info)
     if user_info['status'] == 'active':
         if action == "grouplist":
             await callback.message.delete()

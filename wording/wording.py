@@ -18,7 +18,6 @@ def insert_metrics(filepath, group_num):
                }
     doc.render(context)
     doc.save(f"{current_directory}/generated/{filepath}.docx")
-    print('saved stamp')
 
 
 def convert_to_pdf(filepath: str):
