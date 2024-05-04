@@ -127,19 +127,19 @@ def main(page: ft.Page):
             tab_index = e.control.selected_index
 
         page.controls.clear()
-        page.appbar.leading = ft.IconButton(
-            icon=screens['main']['lead_icon'],
-            on_click=lambda _: change_screen('login'),
-            rotate=math.pi
-        )
-        page.appbar.title.value = tabs_config[tab_index]['title']
+        # page.appbar.leading = ft.IconButton(
+        #     icon=screens['main']['lead_icon'],
+        #     on_click=lambda _: change_screen('login'),
+        #     rotate=math.pi
+        # )
+        # page.appbar.title.value = tabs_config[tab_index]['title']
         page.scroll = tabs_config[tab_index]['scroll']
-        page.appbar.actions = [
-            ft.Container(
-                ft.Row(tabs_config[tab_index]['actions']),
-                margin=ft.margin.only(right=15)
-            )
-        ]
+        # page.appbar.actions = [
+        #     ft.Container(
+        #         ft.Row(tabs_config[tab_index]['actions']),
+        #         margin=ft.margin.only(right=15)
+        #     )
+        # ]
 
         if tab_index == 0:
             page.add(settings_col)
@@ -397,7 +397,7 @@ def main(page: ft.Page):
                     ft.Image(src=f"qrc/{phrase}.png", border_radius=ft.border_radius.all(10)), width=300),
             ],
             # width=350,
-            height=230,
+            height=350,
             alignment=ft.MainAxisAlignment.CENTER,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER
         )
@@ -490,34 +490,33 @@ def main(page: ft.Page):
             # print("err 1")
 
     # if platform.system() == "Windows":
-        # page.route = "/modulecheck?mentor_id=1&module_id=1"
-        # page.route = "/showqr?group_id=1"
-        # page.route = "/"
+    #     page.route = "/modulecheck?mentor_id=1&module_id=1"
+    #     page.route = "/showqr?group_id=1"
+    #     page.route = "/"
 
     current_url = urlparse(page.route)
     url_params = parse_qs(current_url.query)
-    pass
-    # print(current_url.path)
-    page.appbar = appbar
+
+    # page.appbar = appbar
     if current_url.path == '/':
         page.navigation_bar = navbar
         page.navigation_bar.on_change = change_navbar_tab
-        page.appbar.title.value = "Тест"
-        page.appbar.leading = ft.IconButton(
-            icon=screens['main']['lead_icon'],
-            on_click=lambda _: change_screen('login'),
-            rotate=math.pi
-        )
+        # page.appbar.title.value = "Тест"
+        # page.appbar.leading = ft.IconButton(
+        #     icon=screens['main']['lead_icon'],
+        #     on_click=lambda _: change_screen('login'),
+        #     rotate=math.pi
+        # )
         change_navbar_tab(0)
     elif current_url.path == '/modulecheck':
         page.scroll = ft.ScrollMode.HIDDEN
-        page.appbar.title.value = "Посещаемость"
-        page.appbar.bgcolor = ft.colors.SURFACE_VARIANT
+        # page.appbar.title.value = "Посещаемость"
+        # page.appbar.bgcolor = ft.colors.SURFACE_VARIANT
         get_modulecheck(mentor_id=url_params['mentor_id'][0], module_id=url_params['module_id'][0])
     elif current_url.path == '/showqr':
         page.scroll = ft.ScrollMode.HIDDEN
-        page.appbar.title.value = "QR-коды"
-        page.appbar.bgcolor = ft.colors.SURFACE_VARIANT
+        # page.appbar.title.value = "QR-коды"
+        # page.appbar.bgcolor = ft.colors.SURFACE_VARIANT
         get_showqr(group_num=url_params['group_id'][0])
     page.update()
 
@@ -526,8 +525,8 @@ if __name__ == "__main__":
     ft.app(
         target=main,
         assets_dir='assets',
-        upload_dir='assets/uploads',
+        # upload_dir='assets/uploads',
         use_color_emoji=True,
-        view=ft.AppView.WEB_BROWSER,
+        # view=ft.AppView.WEB_BROWSER,
         port=8001
     )
