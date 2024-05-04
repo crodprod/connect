@@ -525,5 +525,6 @@ if __name__ == "__main__":
         target=main,
         assets_dir='assets',
         upload_dir='assets/uploads',
-        use_color_emoji=True
+        use_color_emoji=True,
+        port=8001
     )
