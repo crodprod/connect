@@ -3,6 +3,7 @@ import os
 import docx
 from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
+from docx.shared import Pt
 from docxtpl import DocxTemplate
 from datetime import datetime
 from docx2pdf import convert as pdf_convert
@@ -10,6 +11,9 @@ from docx2pdf import convert as pdf_convert
 current_directory = os.path.dirname(os.path.abspath(__file__))
 parent_directory = os.path.dirname(current_directory)
 
+
+# to-do:
+# Заменить конвертирование pdf на другой модуль
 
 def insert_metrics(filepath, group_num):
     doc = DocxTemplate(f"{current_directory}/generated/{filepath}.docx")
@@ -66,6 +70,36 @@ def get_grouplist(group_list: [], group_num: int):
                 cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
     doc.save(f"{current_directory}/generated/{filename}.docx")
     insert_metrics(filename, group_num)
+    convert_to_pdf(filename)
+
+    return filename
+
+
+def get_feedback(module_name: str, feedback_list: []):
+    creation_date = datetime.now().date().strftime('%d_%m_%Y')
+    filename = f"feedback_{module_name}_{creation_date}"
+    doc = docx.Document(f'{current_directory}/templates/feedback.docx')
+
+    title = f"Обратная связь по модулю «{module_name}» за {creation_date}"
+    main_text = ""
+
+    for fb in feedback_list:
+        main_text += f"Оценка: {fb['mark']}\nКомментарий: {fb['comment']}\n\n"
+
+    paragraph_title = doc.add_paragraph()
+    run = paragraph_title.add_run(title)
+    font = run.font
+    font.size = Pt(15)
+    font.name = "Geologica"
+    font.bold = True
+
+    paragraph_body = doc.add_paragraph()
+    run = paragraph_body.add_run(main_text)
+    font = run.font
+    font.size = Pt(13)
+    font.name = "Geologica"
+
+    doc.save(f"{current_directory}/generated/{filename}.docx")
     convert_to_pdf(filename)
 
     return filename

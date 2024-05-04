@@ -10,7 +10,7 @@ tasker_kb = keyboard.InlineKeyboardBuilder(
 
 reboot_bot_kb = keyboard.InlineKeyboardBuilder(
     markup=[
-        [keyboard.InlineKeyboardButton(text="Перезагрузить ⚡", callback_data="admins_rebootbot")]
+        [keyboard.InlineKeyboardButton(text="Перезагрузить ⚡", callback_data="rebootbot")]
     ]
 )
 
@@ -18,6 +18,12 @@ radio_kb = keyboard.InlineKeyboardBuilder(
     markup=[
         [keyboard.InlineKeyboardButton(text="🟢 Запустить", callback_data="radio_on")],
         [keyboard.InlineKeyboardButton(text="🔴 Остановить", callback_data="radio_off")]
+    ]
+)
+
+check_apply_to_channel_kb = keyboard.InlineKeyboardBuilder(
+    markup=[
+        [keyboard.InlineKeyboardButton(text="Я подписался (-ась)!", callback_data="check_apply")]
     ]
 )
 

@@ -1,4 +1,5 @@
 import asyncio
+import aioschedule
 import datetime
 import logging
 import os
@@ -8,25 +9,30 @@ import re
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters.command import Command, CommandStart, CommandObject
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message
 from aiogram.utils import markdown, keyboard
+from aiogram.methods import DeleteWebhook
+from aiogram.utils.markdown import link
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from dotenv import load_dotenv
 
-from bot_elements.callback_factory import TeachersCallbackFactory, MentorsCallbackFactory, ChildrenCallbackFactory, RadioRequestCallbackFactory
+from bot_elements.callback_factory import TeachersCallbackFactory, MentorsCallbackFactory, ChildrenCallbackFactory, RadioRequestCallbackFactory, SelectModuleCallbackFactory, AdminsCallbackFactory, \
+    RecordModuleToChildCallbackFactory, FeedbackMarkCallbackFactory
 from bot_elements.database import DataBase
-from bot_elements.lexicon import lexicon
-from bot_elements.keyboards import kb_hello, kb_main, tasker_kb, reboot_bot_kb, radio_kb
+from bot_elements.lexicon import lexicon, base_crod_url
+from bot_elements.keyboards import kb_hello, kb_main, tasker_kb, reboot_bot_kb, radio_kb, check_apply_to_channel_kb
 from bot_elements.states import Radio, Feedback
 from functions import load_config_file, update_config_file
-from wording.wording import get_grouplist
+from wording.wording import get_grouplist, get_feedback
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 current_directory = os.path.dirname(os.path.abspath(__file__))
 config = load_config_file('config.json')
 
-bot = Bot(token=os.getenv('BOT_TOKEN'), parse_mode="MarkdownV2")
+bot = Bot(token=os.getenv('BOT_TOKEN'), parse_mode="html")
 dp = Dispatcher()
 
 db = DataBase(
@@ -37,11 +43,12 @@ db = DataBase(
 )
 
 statuses = {
-    'feedback': False,
+    'feedback': True,
     'modules_record': False,
-    'radio': True
+    'radio': False
 }
 radio_request_user_list = []
+feedback_temp_data_dict = {}
 
 months = {
     1: "января",
@@ -59,9 +66,12 @@ months = {
 }
 
 
-def screening_md_symbols(text: str):
-    return text.replace(".", r"\.").replace("!", r"\!").replace("(", r"\(").replace(")", r"\)").replace("-", r"\-").replace("|", r"\|")
+# to-do:
+# Логика отправки обратки у детей
+# Заявка на изменение модуля
 
+def get_text_link(title: str, link: str):
+    return f"<a href='{link}'>{title}</a>"
 
 async def is_pass_phrase_ok(table: str, pass_phrase: str):
     query = f"SELECT COUNT(*) as count FROM {table} WHERE pass_phrase = %s"
@@ -124,19 +134,30 @@ async def send_hello(telegram_id: int, table: str):
     db.connect()
     user_info = db.execute_query(query, (telegram_id,))
     if table == 'children':
-        query = f"SELECT * FROM mentors WHERE group_num = %s"
-        mentors_info = db.execute_query(query, (user_info['group_num'],), many=True)
-        mentors = ""
-        for mentor in mentors_info:
-            mentors += f"{mentor['name']}\n"
-        await bot.send_message(
-            chat_id=telegram_id,
-            text=lexicon['hello_messages']['children'].format(
-                user_info['name'], user_info['group_num'],
-                mentors
-            ),
-            reply_markup=kb_hello[table].as_markup()
-        )
+        member_info = await bot.get_chat_member(chat_id=f"@{os.getenv('ID_CHANNEL')}", user_id=telegram_id)
+        if type(member_info) != types.chat_member_left.ChatMemberLeft:
+            query = f"SELECT * FROM mentors WHERE group_num = %s"
+            mentors_info = db.execute_query(query, (user_info['group_num'],), many=True)
+            mentors = ""
+            for mentor in mentors_info:
+                mentors += f"{mentor['name']}\n"
+            await bot.send_message(
+                chat_id=telegram_id,
+                text=lexicon['hello_messages']['children'].format(
+                    user_info['name'], user_info['group_num'],
+                    mentors
+                ),
+                reply_markup=kb_hello[table].as_markup()
+            )
+        else:
+            link = f"https://t.me/{os.getenv('ID_CHANNEL')}"
+            await bot.send_message(
+                chat_id=telegram_id,
+                text="<b>Привет! Для начала тебе нужно подписаться на канал ЦРОДа, в нём мы публикуем все самые интересные новости о сменах и потоках</b>"
+                     f"\n\n{get_text_link('Открыть канал', link)}"
+                     "\n\nПосле того как подпишешься, возвращайся сюда и жми на кнопку под сообщением",
+                reply_markup=check_apply_to_channel_kb.as_markup()
+            )
     elif table == 'mentors':
         query = "SELECT COUNT(*) as count FROM children WHERE group_num = %s"
         children_count = db.execute_query(query, (user_info['group_num'],))['count']
@@ -145,9 +166,8 @@ async def send_hello(telegram_id: int, table: str):
         mentors_info = db.execute_query(query, (user_info['group_num'],), many=True)
         for mentor in mentors_info:
             if mentor['telegram_id'] != telegram_id:
-                other_mentors += f"{mentor['name']}\n"
-                # other_mentors += f"[Нажми](tg://resolve?user_id={mentor['telegram_id']})\n"
-                # other_mentors += f"{mentor['name']}\n"
+                mntr = get_text_link(mentor['name'], f"tg://user?id={mentor['telegram_id']}")
+                other_mentors += f"{mntr}\n"
         await bot.send_message(
             chat_id=telegram_id,
             text=lexicon['hello_messages']['mentors'].format(
@@ -194,8 +214,8 @@ def update_env_var(variable, value):
 async def send_reboot_message(telegram_id: int):
     await bot.send_message(
         chat_id=telegram_id,
-        text="*Перезагрузка бота*"
-             "\n\nДля того, чтобы изменения вступили в силу, необходима перезагрузка бота\. Чтобы сделать это, нажмите на кнопку ниже",
+        text="<b>Перезагрузка бота</b>"
+             "\n\nДля того, чтобы изменения вступили в силу, необходима перезагрузка бота. Чтобы сделать это, нажмите на кнопку ниже",
         reply_markup=reboot_bot_kb.as_markup()
     )
 
@@ -228,7 +248,7 @@ async def deep_linking(message: Message, command: CommandObject):
     if target in ['children', 'mentors', 'teachers', 'admins']:
         if not await is_registered(telegram_id):
             if await is_pass_phrase_ok(target, pass_phrase):
-                query = f"UPDATE {target} SET telegram_id = %s WHERE pass_phrase = %s"
+                query = f"UPDATE {target} SET telegram_id = %s, status = 'active' WHERE pass_phrase = %s"
                 db.connect()
                 db.execute_query(query, (telegram_id, pass_phrase,))
                 db.disconnect()
@@ -253,7 +273,7 @@ async def deep_linking(message: Message, command: CommandObject):
             update_config_file(tasker_users, path)
             await bot.send_message(
                 chat_id=message.chat.id,
-                text="*Твой телеграм\-аккаунт подключен\! Теперь новые задачи из Таскера будут приходить сюда*"
+                text="<b>Твой телеграм-аккаунт подключен! Теперь новые задачи из Таскера будут приходить сюда</b>"
                      "\n\nСейчас ты можешь вернуться обратно",
                 reply_markup=tasker_kb.as_markup()
             )
@@ -262,28 +282,43 @@ async def deep_linking(message: Message, command: CommandObject):
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     telegram_id = message.chat.id
+    print(message.from_user.url)
     message_text = {
-        'children': "*Ты в главном меню, выбери, что хочешь сделать*",
-        'mentors': "*Выберите требуемое действие*",
-        'teachers': "*Выберите требуемое действие*",
-        'admins': "*Выберите требуемое действие*",
-        None: "Чтобы начать пользоваться ботом, тебе нужно *отсканировать свой личный QR\-код\.* "
+        'children': "<b>Ты в главном меню, выбери, что хочешь сделать</b>",
+        'mentors': "<b>Выберите требуемое действие</b>",
+        'teachers': "<b>Выберите требуемое действие</b>",
+        'admins': "<b>Выберите требуемое действие</b>",
+        None: "Чтобы начать пользоваться ботом, тебе нужно <b>отсканировать свой личный QR-код.</b> "
               "Если возникают трудности, обратись к воспитателям или администрации"
 
     }
+    if str(telegram_id)[0] != '-':
+        user_status = await get_user_status(telegram_id)
 
-    user_status = await get_user_status(telegram_id)
+        if user_status is None:
+            rm = None
+        else:
+            rm = kb_main[user_status].as_markup()
 
-    if user_status is None:
-        rm = None
+        await bot.send_message(
+            chat_id=telegram_id,
+            text=message_text[user_status],
+            reply_markup=rm
+        )
     else:
-        rm = kb_main[user_status].as_markup()
-
-    await bot.send_message(
-        chat_id=telegram_id,
-        text=message_text[user_status],
-        reply_markup=rm
-    )
+        if telegram_id == int(os.getenv('ID_GROUP_RADIO')):
+            radio_builder = keyboard.InlineKeyboardBuilder()
+            if not statuses['radio']:
+                text = "Чтобы включить радио, нажмите на кнопку ниже, дети получат сообщение и смогу отправлять заявки"
+                radio_builder.button(text="🟢 Включить радио", callback_data="radio_on")
+            else:
+                text = "Чтобы выключить радио, нажмите на кнопку ниже, дети не смогут отправлять заявки"
+                radio_builder.button(text="🔴 Выключить радио", callback_data="radio_off")
+            await message.answer(
+                text="<b>Управление радио</b>"
+                     f"\n\n{text}",
+                reply_markup=radio_builder.as_markup()
+            )
 
 
 @dp.message(Command("setup"))
@@ -295,20 +330,31 @@ async def handle_setup_commands(message: types.Message):
             if command[1] in ['radio', 'errors', 'modules', 'fback']:
                 # update_env_var(f'ID_GROUP_{command[1].upper()}', message.chat.id)
                 await message.answer(
-                    text="*Изменение беседы*"
-                         f"\n\nДанная беседа установлена основной для *{command[1]}*"
+                    text="<b>Изменение беседы</b>"
+                         f"\n\nДанная беседа установлена основной для <b>{command[1]}</b>"
                 )
                 await asyncio.sleep(1)
                 await send_reboot_message(message.chat.id)
+            elif command[1] == "channel":
+                await message.answer(
+                    text="<b>Изменение ссылки на Telegram-канал</b>"
+                         "\n\nОтправьте новый ник канала в формате _@название_канала_"
+                         "\n\nЕсли передумали, отправьте /start"
+                )
+            #     to-do: логика обновления ссылки на канал
             else:
                 await message.answer(
-                    text=f"*Беседы {command[1]} не существует*\n\nДля изменения беседы введите"
-                         f"\n/setup radio\|errors\|modules\|fback"
+                    text="<b>Некорректная команда</b> \n\nДля изменения беседы отправьте"
+                         "\n/setup radio|errors|modules|fback"
+                         "\n\nДля изменения ссылки на Telegram-канал отправьте"
+                         "\n/setup channel"
                 )
         else:
             await message.answer(
-                text="*Некорректная команда* \n\nДля изменения беседы введите"
-                     "\n/setup radio\|errors\|modules\|fback"
+                text="<b>Некорректная команда</b> \n\nДля изменения беседы отправьте"
+                     "\n/setup radio|errors|modules|fback"
+                     "\n\nДля изменения ссылки на Telegram-канал отправьте"
+                     "\n/setup channel"
             )
 
 
@@ -316,10 +362,42 @@ async def handle_setup_commands(message: types.Message):
 async def handle_radio_commands(message: types.Message):
     if message.chat.id == int(os.getenv('ID_GROUP_RADIO')):
         await message.answer(
-            text="*Управление радио*"
+            text="<b>Управление радио</b>"
                  "\n\nВыберите требуемое действие",
             reply_markup=radio_kb.as_markup()
         )
+
+
+@dp.callback_query(F.data == "radio_on")
+async def start_radio(callback: types.CallbackQuery):
+    radio_request_user_list.clear()
+    statuses['radio'] = True
+    await callback.answer(
+        text="🟢 Радио запущено, рассылаем информацию детям",
+        show_alert=True
+    )
+    await callback.message.delete()
+    query = "SELECT * FROM children where status = 'active'"
+    db.connect()
+    children_list = db.execute_query(query, many=True)
+    db.disconnect()
+    for child in children_list:
+        await bot.send_message(
+            chat_id=child['telegram_id'],
+            text="<b>Наше радио в эфире, ждём твою заявку!</b>"
+                 "\n\nЧтобы отправить заявку, нажми /start"
+        )
+
+
+@dp.callback_query(F.data == "radio_off")
+async def stop_radio(callback: types.CallbackQuery):
+    radio_request_user_list.clear()
+    statuses['radio'] = False
+    await callback.answer(
+        text="🔴 Радио остановлено, дети не могут отправлять заявки",
+        show_alert=True
+    )
+    await callback.message.delete()
 
 
 @dp.callback_query(F.data == "firststart")
@@ -333,7 +411,7 @@ async def send_random_value(callback: types.CallbackQuery):
 
 
 @dp.callback_query(MentorsCallbackFactory.filter())
-async def callbacks_teachers(callback: types.CallbackQuery, callback_data: MentorsCallbackFactory):
+async def callbacks_mentors(callback: types.CallbackQuery, callback_data: MentorsCallbackFactory):
     action = callback_data.action
     user_info = await get_user_info(callback.from_user.id, 'mentors')
     if user_info['status'] == 'active':
@@ -345,7 +423,7 @@ async def callbacks_teachers(callback: types.CallbackQuery, callback_data: Mento
             db.disconnect()
 
             msg = await callback.message.answer(
-                text="*Список группы создаётся\.\.\.*"
+                text="<b>Список группы создаётся...</b>"
             )
             group_list_filename = get_grouplist(group_list, user_info['group_num'])
             filepath = f"{current_directory}/wording/generated/{group_list_filename}.pdf"
@@ -366,35 +444,129 @@ async def callbacks_teachers(callback: types.CallbackQuery, callback_data: Mento
             fb_count = db.execute_query(query, (user_info['group_num'], datetime.datetime.now().date(),))['count']
             query = "SELECT COUNT(*) AS count from children WHERE group_num = %s"
             group_count = db.execute_query(query, (user_info['group_num'],))['count']
+            db.disconnect()
             current_date = datetime.datetime.now().date().strftime('%d.%m.%Y')
 
             await callback.answer(
-                text=f"Статистика за {current_date}"
-                     f"\nОтправлено {fb_count} из {group_count} ",
+                text=lexicon['callback_alerts']['mentor_fback_stat'].format(
+                    current_date, fb_count, group_count
+                ),
                 show_alert=True
             )
         elif action == "births":
             query = "SELECT c.* FROM children c JOIN shift_info s ON c.birth < s.end_date AND c.birth >= s.start_date AND c.group_num = %s"
             db.connect()
             birth_list = db.execute_query(query, (user_info['group_num'],), many=True)
+            db.disconnect()
             birth_list.sort(key=lambda el: el['birth'])
             if len(birth_list) > 0:
                 await callback.message.delete()
-                text = f"*Список именинников*\n\n"
+                text = f"<b>Список именинников</b>\n\n"
                 for child in birth_list:
-                    text += f"{child['name']} \({child['birth'].day} {months[child['birth'].month]}\)"
+                    text += f"{child['name']} ({child['birth'].day} {months[child['birth'].month]})"
                 await callback.message.answer(
                     text=text,
                     reply_markup=kb_hello['mentors'].as_markup()
                 )
             else:
                 await callback.answer(
-                    text="В вашей группе никто не будет праздновать день рождения",
+                    text=lexicon['callback_alerts']['no_births_group'],
                     show_alert=True
                 )
+        elif action == "modules_list":
+            query = "SELECT * FROM modules WHERE status = 'active'"
+            db.connect()
+            modules = db.execute_query(query, many=True)
+            if len(modules) > 0:
+                await callback.message.delete()
+                btns_builder = keyboard.InlineKeyboardBuilder()
+                for module in modules:
+                    btns_builder.button(text=module['name'], callback_data=SelectModuleCallbackFactory(module_id=module['id'], name=module['name']))
+                btns_builder.adjust(2)
+                await callback.message.answer(
+                    text="<b>Выберите модуль для просмотра списка участников</b>",
+                    reply_markup=btns_builder.as_markup()
+                )
+            else:
+                await callback.answer(
+                    text="Активные модули отсутствуют",
+                    show_alert=True
+                )
+            db.disconnect()
+        elif action == "qrc":
+            await callback.message.delete()
+            btn = keyboard.InlineKeyboardBuilder().button(
+                text="Показать QR-коды #️⃣",
+                web_app=types.WebAppInfo(
+                    url=f"{base_crod_url}/connect/showqr?group_id={user_info['group_num']}"
+                )
+            )
+            await callback.message.answer(
+                text="Чтобы просмотреть список QR-кодов группы, нажмите на кнопку ниже и выберите ребёнка",
+                reply_markup=btn.as_markup()
+            )
+        elif action == "traffic":
+            await callback.message.delete()
+            btn = keyboard.InlineKeyboardBuilder().button(
+                text="Отметить посещаемость",
+                web_app=types.WebAppInfo(
+                    url=f"{base_crod_url}/connect/modulecheck?mentor_id={user_info['id']}&module_id={1}"
+                )
+            )
+            await callback.message.answer(
+                text="Чтобы просмотреть список QR-кодов группы, нажмите на кнопку ниже и выберите ребёнка",
+                reply_markup=btn.as_markup()
+            )
+
+
+
     else:
         await callback.answer(
-            text="⛔ Действие недоступно",
+            text=lexicon['callback_alerts']['mentor_access_denied'],
+            show_alert=True
+        )
+
+
+@dp.callback_query(F.data == "check_apply")
+async def check_apply_to_channel(callback: types.CallbackQuery):
+    member_info = await bot.get_chat_member(chat_id=f"@{os.getenv('ID_CHANNEL')}", user_id=callback.message.chat.id)
+    if type(member_info) != types.chat_member_left.ChatMemberLeft:
+        await callback.message.delete()
+        await send_hello(callback.message.chat.id, 'children')
+    else:
+        await callback.answer(
+            text="Кажется, что ты  ещё не подписался (-ась) на канал, попробуй ещё раз",
+            show_alert=True
+        )
+
+
+@dp.callback_query(F.data == "rebootbot")
+async def check_apply_to_channel(callback: types.CallbackQuery):
+    await callback.answer(
+        text="(ЗАГЛУШКА) Бот перезагружается",
+        show_alert=True
+    )
+    await callback.message.delete()
+
+
+@dp.callback_query(SelectModuleCallbackFactory.filter())
+async def callnacks_select_module(callback: types.CallbackQuery, callback_data: SelectModuleCallbackFactory):
+    module_id, module_name = callback_data.module_id, callback_data.name
+    group_list = await get_module_children_list(module_id)
+    if len(group_list) > 0:
+        await callback.message.delete()
+
+        text = f"<b>Список группы по модулю «{module_name}»</b>\n\n"
+
+        for index, part in enumerate(group_list):
+            text += f"{index + 1}. {part['name']} ({part['group_num']})\n"
+        await callback.message.answer(
+            text=text,
+            reply_markup=kb_hello['mentors'].as_markup()
+        )
+    else:
+        await callback.answer(
+            text="На данный модуль пока никто не записался",
             show_alert=True
         )
 
@@ -414,27 +586,27 @@ async def callbacks_teachers(callback: types.CallbackQuery, callback_data: Teach
             if len(group_list) > 0:
                 await callback.message.delete()
 
-                text = f"*Список группы по модулю «{module_info['name']}»*\n\n"
+                text = f"<b>Список группы по модулю «{module_info['name']}»</b>\n\n"
 
                 for index, part in enumerate(group_list):
-                    text += f"{index + 1}\. {part['name']} \({part['group_num']}\)\n"
+                    text += f"{index + 1}. {part['name']} ({part['group_num']})\n"
                 await callback.message.answer(
                     text=text,
                     reply_markup=kb_hello['teachers'].as_markup()
                 )
             else:
                 await callback.answer(
-                    text="На ваш модуль пока никто не записался, попробуйте позже",
+                    text=lexicon['callback_alerts']['no_parts_in_module'],
                     show_alert=True
                 )
         elif action == "feedback":
             feedback_list = await get_module_feedback_today(user_info['module_id'])
             if len(feedback_list) > 0:
                 await callback.message.delete()
-                current_date = datetime.datetime.now().date().strftime('%d\.%m\.%Y')
-                text = f"*Обратная связь по модулю «{module_info['name']}» за {current_date}*\n\n"
+                current_date = datetime.datetime.now().date().strftime('%d.%m.%Y')
+                text = f"<b>Обратная связь по модулю «{module_info['name']}» за {current_date}</b>\n\n"
                 for fb in feedback_list:
-                    text += screening_md_symbols(f"Оценка: {fb['mark']}\nКомментарий: {fb['comment']}\n\n")
+                    text += f"Оценка: {fb['mark']}\nКомментарий: {fb['comment']}\n\n"
                 await callback.message.answer(
                     text=text,
                     reply_markup=kb_hello['teachers'].as_markup()
@@ -442,12 +614,12 @@ async def callbacks_teachers(callback: types.CallbackQuery, callback_data: Teach
 
             else:
                 await callback.answer(
-                    text="Обратной связи за сегодняшний день ещё нет, попробуйте позже",
+                    text=lexicon['callback_alerts']['no_fback_teacher'],
                     show_alert=True
                 )
     else:
         await callback.answer(
-            text="⛔ Действие недоступно",
+            text=lexicon['callback_alerts']['teacher_access_denied'],
             show_alert=True
         )
 
@@ -464,16 +636,37 @@ async def radio_text_sended(message: Message, state: FSMContext):
         builder_approve_radio.adjust(1)
         await bot.send_message(
             chat_id=os.getenv('ID_GROUP_RADIO'),
-            text="*Новая заявка*"
+            text="<b>Новая заявка</b>"
                  f"\n\n{message.text.strip()}",
             reply_markup=builder_approve_radio.as_markup()
         )
         await message.answer(
-            text="*Твоя заявка отправлена и ждёт подтверждения*"
+            text="<b>Твоя заявка отправлена и ждёт подтверждения</b>"
                  f"\n\n{message.text.strip()}",
             reply_markup=kb_hello['children'].as_markup()
         )
         radio_request_user_list.append(message.from_user.id)
+
+
+@dp.message(Feedback.feedback_text)
+async def feedback_mark_sended(message: Message, state: FSMContext):
+    user_info = await get_user_info(message.from_user.id, "children")
+    feedback = feedback_temp_data_dict[user_info['id']]
+    await state.clear()
+    if "/skip" in message.text:
+        comment = "отсутствует"
+    else:
+        comment = message.text
+    query = "INSERT INTO feedback (module_id, child_id, mark, comment, date) VALUES (%s, %s, %s, %s, %s)"
+    db.connect()
+    db.execute_query(query, (feedback['module_id'], user_info['id'], feedback['mark'], comment, datetime.datetime.now().date()))
+    await bot.send_message(
+        chat_id=os.getenv('ID_GROUP_FBACK'),
+        text=f"<b>Модуль {feedback['module_name']}</b>"
+             f"\nОценка: {feedback['mark']}"
+             f"\nКомменатрий: {markdown.text(comment)}"
+    )
+    await create_feedback_proccess(user_info, feedback['callback'], "after")
 
 
 @dp.callback_query(RadioRequestCallbackFactory.filter())
@@ -483,12 +676,12 @@ async def callbacks_radio(callback: types.CallbackQuery, callback_data: RadioReq
     radio_request_user_list.remove(child_id)
     await callback.message.delete_reply_markup()
     if action == 'accept':
-        text = "📨*Тук\-тук, новое сообщение*" \
-               "\n\nТвоя заявка на радио обработана, жди в эфире уже совсем скоро\!"
+        text = "📨<b>Тук-тук, новое сообщение</b>" \
+               "\n\nТвоя заявка на радио обработана, жди в эфире уже совсем скоро!"
         status = callback.message.text + "\n\n🟢 Принято"
     elif action == 'decline':
-        text = "📨*Тук\-тук, новое сообщение*" \
-               "\n\n*К сожалению, твоя заявка отклонена, возможно она не прошла цензуру, но ты можешь отправить новую, пока наше радио в эфире*"
+        text = "📨<b>Тук-тук, новое сообщение</b>" \
+               "\n\n<b>К сожалению, твоя заявка отклонена, возможно она не прошла цензуру, но ты можешь отправить новую, пока наше радио в эфире</b>"
         status = callback.message.text + "\n\n🔴 Отклонено"
 
     await callback.message.edit_text(callback.message.text + status)
@@ -498,51 +691,173 @@ async def callbacks_radio(callback: types.CallbackQuery, callback_data: RadioReq
     )
 
 
+@dp.callback_query(AdminsCallbackFactory.filter())
+async def callbacks_admins(callback: types.CallbackQuery, callback_data: AdminsCallbackFactory, state: FSMContext):
+    action = callback_data.action
+    user_info = await get_user_info(callback.from_user.id, 'children')
+    if user_info['status'] == 'active':
+        if action == "feedback":
+            query = "SELECT * FROM modules WHERE status = 'active'"
+            db.connect()
+            modules = db.execute_query(query, many=True)
+            if len(modules) > 0:
+                await callback.message.delete()
+                btns_builder = keyboard.InlineKeyboardBuilder()
+                for module in modules:
+                    btns_builder.button(text=module['name'], callback_data=GetModuleFeedbackCallbackFactory(module_id=module['id'], name=module['name']))
+                btns_builder.adjust(2)
+                await callback.message.answer(
+                    text="<b>Выберите модуль для получения списка обратной связи</b>",
+                    reply_markup=btns_builder.as_markup()
+                )
+            else:
+                await callback.answer(
+                    text="Активные модули отсутствуют",
+                    show_alert=True
+                )
+            db.disconnect()
+
+    else:
+        await callback.answer(
+            text=lexicon['callback_alerts']['access_denied'],
+            show_alert=True
+        )
+
+
+async def send_recorded_modules_info(child_id: int, callback: types.CallbackQuery):
+    query = "SELECT * FROM modules WHERE id IN (SELECT module_id FROM modules_records WHERE child_id = %s)"
+    recorded_modules_info = db.execute_query(query, (child_id,), many=True)
+    text = "<b>Твои образовательные модули</b>\n\n"
+    for index, module in enumerate(recorded_modules_info):
+        query = "SELECT name FROM teachers WHERE module_id = %s"
+        teacher_name = db.execute_query(query, (module['id'],))['name']
+        text += f"{index + 1}. {module['name']}" \
+                f"\n🧑‍🏫 {teacher_name}" \
+                f"\n📍 {module['location']}\n\n"
+
+    await callback.message.answer(
+        text=text,
+        reply_markup=kb_hello['children'].as_markup()
+    )
+
+
+@dp.callback_query(RecordModuleToChildCallbackFactory.filter())
+async def callbacks_children(callback: types.CallbackQuery, callback_data: RecordModuleToChildCallbackFactory, state: FSMContext):
+    query = "INSERT INTO modules_records (child_id, module_id) VALUES (%s, %s)"
+    db.connect()
+    db.execute_query(query, (callback_data.child_id, callback_data.module_id,))
+    db.disconnect()
+    await recording_to_module_process(callback_data.child_id, callback)
+
+
+async def generate_modules_list_to_record(child_id: int, callback: types.CallbackQuery):
+    # выбрать модули, на которые чел не записан и на которых есть свободное место
+    query = "SELECT * FROM modules WHERE id NOT IN (SELECT module_id FROM modules_records WHERE child_id = %s) AND seats_real < seats_max"
+    db.connect()
+    modules_list = db.execute_query(query, (child_id,), many=True)
+    query = "SELECT COUNT(*) AS count FROM modules_records WHERE child_id = %s"
+    recorded_modules_count = db.execute_query(query, (child_id,))['count']
+    db.disconnect()
+    if modules_list is not None:
+        builder = keyboard.InlineKeyboardBuilder()
+
+        for module in modules_list:
+            builder.button(text=module['name'], callback_data=RecordModuleToChildCallbackFactory(child_id=child_id, module_id=module['id']))
+        builder.adjust(1)
+        await callback.message.answer(
+            text=f"Выбери модуль №{recorded_modules_count + 1}",
+            reply_markup=builder.as_markup()
+        )
+
+
+async def recording_to_module_process(child_id: int, callback: types.CallbackQuery):
+    query = "SELECT * FROM modules_records WHERE child_id = %s"
+    db.connect()
+    modules_records_list = db.execute_query(query, (child_id,), many=True)
+    if len(modules_records_list) > 0:
+        await callback.message.delete()
+        if len(modules_records_list) == config['modules_count']:
+            await send_recorded_modules_info(child_id, callback)
+        else:
+            await generate_modules_list_to_record(child_id, callback)
+    else:
+        if statuses['modules_record']:
+            await callback.message.delete()
+            await generate_modules_list_to_record(child_id, callback)
+        else:
+            await callback.answer(
+                text=lexicon['callback_alerts']['no_module_record'],
+                show_alert=True
+            )
+
+
+@dp.callback_query(FeedbackMarkCallbackFactory.filter())
+async def callbacks_children(callback: types.CallbackQuery, callback_data: FeedbackMarkCallbackFactory, state: FSMContext):
+    feedback_temp_data_dict[callback_data.child_id]['mark'] = callback_data.mark
+    feedback_temp_data_dict[callback_data.child_id]['callback'] = callback
+    await callback.message.delete()
+    await callback.message.answer(
+        f"<b>Обратная связь по модулю «{feedback_temp_data_dict[callback_data.child_id]['module_name']}»</b>"
+        f"\nТвоя оценка: {callback_data.mark}"
+        f"\n\nНапиши короткий комментарий к своей оценке (что понравилось, а что не очень)\nЕсли не хочешь ничего писать, то отправь /skip"
+    )
+    await state.set_state(Feedback.feedback_text)
+
+
+async def create_feedback_proccess(user_info: [], callback: types.CallbackQuery, call_type: str = "new"):
+    feedback_temp_data_dict[user_info['id']] = {}
+
+
+    query = "SELECT * FROM modules WHERE id IN (SELECT module_id FROM modules_records WHERE child_id = %s) AND id NOT IN (SELECT module_id FROM feedback WHERE child_id = %s AND date = %s)"
+    db.connect()
+    need_to_give_feedback_list = db.execute_query(query, (user_info['id'], user_info['id'], datetime.datetime.now().date(),), many=True)
+    if len(need_to_give_feedback_list) > 0:
+        # await callback.message.delete()
+        module = need_to_give_feedback_list[0]
+        feedback_temp_data_dict[user_info['id']]['module_id'] = module['id']
+        feedback_temp_data_dict[user_info['id']]['module_name'] = module['name']
+        emojis = {1: "😠", 2: "☹", 3: "😐", 4: "🙂", 5: "😃", }
+        builder = keyboard.InlineKeyboardBuilder()
+        for i in range(1, 6):
+            builder.button(text=f'{i}{emojis[i]}', callback_data=FeedbackMarkCallbackFactory(child_id=user_info['id'], module_id=module['id'], mark=i))
+        builder.adjust(5)
+        await bot.send_message(
+            chat_id=user_info['telegram_id'],
+            text=f"<b>Обратная связь по модулю «{module['name']}»</b>"
+                 f"\n\nКак всё прошло? "
+                 f"Выбери оценку от 1 до 5, где 1 - <b>очень плохо</b>, а 5 - <b>очень хорошо</b>",
+            reply_markup=builder.as_markup()
+        )
+        return True
+    else:
+        if call_type == "after":
+            await callback.message.answer(
+                text="Обратная связь за сегодня отправлена, спасибо!",
+                reply_markup=kb_hello['children'].as_markup()
+            )
+        return False
+
+
 @dp.callback_query(ChildrenCallbackFactory.filter())
 async def callbacks_children(callback: types.CallbackQuery, callback_data: ChildrenCallbackFactory, state: FSMContext):
     action = callback_data.action
     user_info = await get_user_info(callback.from_user.id, 'children')
     if user_info['status'] == 'active':
-
         if action == "modules":
-            query = "SELECT * FROM modules_records WHERE child_id = %s"
-            db.connect()
-            modules_records_list = db.execute_query(query, (user_info['id'],), many=True)
-            if len(modules_records_list) > 0:
-                await callback.message.delete()
-                if len(modules_records_list) == config['modules_count']:
-                    query = "SELECT * FROM modules WHERE id IN (SELECT module_id FROM modules_records WHERE child_id = %s)"
-                    recorded_modules_info = db.execute_query(query, (user_info['id'],), many=True)
-                    text = "*Твои образовательные модули*\n\n"
-                    for index, module in enumerate(recorded_modules_info):
-                        query = "SELECT name FROM teachers WHERE module_id = %s"
-                        teacher_name = db.execute_query(query, (module['id'],))['name']
-                        text += f"{index + 1}\. «{module['name']}»" \
-                                f"\n🧑‍🏫 {teacher_name}" \
-                                f"\n📍 {module['location']}"
-
-                    await callback.message.answer(
-                        text=text,
-                        reply_markup=kb_hello['children'].as_markup()
-                    )
-                else:
-                    # Не на все модули записался
-                    pass
-            else:
-                if statuses['modules_record']:
-                    pass
-                else:
-                    await callback.answer(
-                        text="Запись на образователи модули пока закрыта, как только она начнётся, мы пришлём тебе сообщение",
-                        show_alert=True
-                    )
+            await recording_to_module_process(user_info['id'], callback)
 
         elif action == "feedback":
             if statuses['feedback']:
-                pass
+                if not await create_feedback_proccess(user_info, callback):
+                    await callback.answer(
+                        text="Ты уже отправил(-а) обратную связь по сегодняшим модулям, спасибо!",
+                        show_alert=True
+                    )
+                else:
+                    await callback.answer()
             else:
                 await callback.answer(
-                    text="Сейчас мы не собираем обратную связь, но как только начнём, обязатаельно пришлём тебе сообщение",
+                    text=lexicon['callback_alerts']['no_fback_child'],
                     show_alert=True
                 )
 
@@ -552,33 +867,97 @@ async def callbacks_children(callback: types.CallbackQuery, callback_data: Child
                     await callback.message.delete()
                     await state.set_state(Radio.request_text)
                     await callback.message.answer(
-                        text="*Радио ждёт именно тебя\!*"
+                        text="<b>Радио ждёт именно тебя!</b>"
                              "\n\nОтправь название песни, чтобы мы включили её на нашем радио " \
-                             "или напиши пожелание, которое мы озвучим в прямом эфире\! \(не забудь указать, кому адресовано пожелание\)" \
+                             "или напиши пожелание, которое мы озвучим в прямом эфире! (не забудь указать, кому адресовано пожелание)" \
                              "\n\nЧтобы вернуться назад, отправь /start" \
                              "\n\n_Все заявки проходят проверку на цензуру, поэтому не все песни могут прозвучать в эфире_"
                     )
 
                 else:
                     await callback.answer(
-                        text="У тебя уже есть активная заявка на радио. Подожди, пока мы её обработаем, чтобы отправить новую",
+                        text=lexicon['callback_alerts']['radio_request_already'],
                         show_alert=True
                     )
 
             else:
                 await callback.answer(
-                    text="Сейчас наше радио не работает, как только мы будем в эфире, тебе придёт уведомление",
+                    text=lexicon['callback_alerts']['no_radio'],
                     show_alert=True
                 )
 
     else:
         await callback.answer(
-            text="⛔ Действие недоступно",
+            text=lexicon['callback_alerts']['child_access_denied'],
             show_alert=True
         )
 
 
+async def start_feedback():
+    statuses['feedback'] = True
+    query = "SELECT * FROM children WHERE status = %s"
+    db.connect()
+    children_list = db.execute_query(query, ('active',), many=True)
+    for child in children_list:
+        if child['telegram_id']:
+            await bot.send_message(
+                chat_id=child['telegram_id'],
+                text="Сбор обратной связи открыт!",
+                reply_markup=kb_hello['children'].as_markup()
+            )
+
+
+async def stop_feedback():
+    statuses['feedback'] = False
+    query = "SELECT * FROM teachers WHERE status = 'active'"
+    db.connect()
+    teachers_list = db.execute_query(query, many=True)
+    for teacher in teachers_list:
+        query = "SELECT * FROM feedback WHERE date = %s AND module_id = %s"
+        feedback_list = db.execute_query(query, (datetime.datetime.now().date(), teacher['module_id']), many=True)
+        if len(feedback_list) > 0:
+            query = "SELECT name FROM modules WHERE id = %s"
+            module_name = db.execute_query(query, (teacher['module_id'],))['name']
+            filename = get_feedback(module_name, feedback_list)
+            filepath = f"{current_directory}/wording/generated/{filename}.pdf"
+            document = types.FSInputFile(filepath)
+            date = datetime.datetime.now().date().strftime('%d.%m.%Y')
+            await bot.send_document(
+                chat_id=teacher['telegram_id'],
+                document=document,
+                caption=f"<b>Рассылка обратной связи</b>"
+                        f"\n\nОбратная связь по вашему модулю за {date}",
+                reply_markup=kb_hello['mentors'].as_markup()
+            )
+            # if os.path.exists(filepath):
+            #     os.remove(filepath)
+        else:
+            await bot.send_message(
+                chat_id=teacher['telegram_id'],
+                text=f"<b>Рассылка обратной связи</b>"
+                     f"\n\n{' '.join(teacher['name'].split()[1:])}, за сегодняшний день по вашему образовательному модулю не было получено обратной связи",
+                reply_markup=kb_hello['teachers'].as_markup()
+            )
+
+
 async def main():
+    scheduler = AsyncIOScheduler()
+    schedule = config['auto_actions']
+    scheduler.add_job(
+        start_feedback,
+        "cron",
+        day_of_week=schedule['start_feedback']['working_period'],
+        hour=schedule['start_feedback']['hour'],
+        minute=schedule['start_feedback']['minute']
+    )
+    scheduler.add_job(
+        stop_feedback,
+        "cron",
+        day_of_week=schedule['stop_feedback']['working_period'],
+        hour=schedule['stop_feedback']['hour'],
+        minute=schedule['stop_feedback']['minute'])
+    scheduler.start()
+    await bot(DeleteWebhook(drop_pending_updates=True))
     await dp.start_polling(bot)
 
 
