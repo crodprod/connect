@@ -394,7 +394,7 @@ def main(page: ft.Page):
         dialog_qr.content = ft.Column(
             [
                 ft.Container(
-                    ft.Image(src=qr_path, border_radius=ft.border_radius.all(10)), width=300),
+                    ft.Image(src=f"qrc/{phrase}.png", border_radius=ft.border_radius.all(10)), width=300),
             ],
             # width=350,
             height=230,
@@ -489,9 +489,9 @@ def main(page: ft.Page):
             pass
             # print("err 1")
 
-    if platform.system() == "Windows":
+    # if platform.system() == "Windows":
         # page.route = "/modulecheck?mentor_id=1&module_id=1"
-        page.route = "/showqr?group_id=1"
+        # page.route = "/showqr?group_id=1"
         # page.route = "/"
 
     current_url = urlparse(page.route)
