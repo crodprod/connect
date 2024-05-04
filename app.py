@@ -68,7 +68,7 @@ def main(page: ft.Page):
         url = f'https://api.telegram.org/bot{os.getenv("BOT_TOKEN")}/sendMessage'
         data = {'chat_id': tID, 'text': message_text, "parse_mode": "Markdown"}
         response = post(url=url, data=data)
-        print(response.json())
+        # print(response.json())
 
     def make_db_request(sql_query: str, params: tuple = (), get_many: bool = None, put_many: bool = None):
         connection, cur = create_db_connection()
@@ -91,7 +91,7 @@ def main(page: ft.Page):
                 connection.commit()
                 return data
             except Exception as e:
-                print(e)
+                # print(e)
                 return None
                 # elements.global_vars.DB_FAIL = True
                 # logging.error(f"DATABASE REQUEST: {e}\n{sql_query}{params}")
@@ -101,7 +101,7 @@ def main(page: ft.Page):
                 #     elements.global_vars.DB_FAIL = False
                 # return None
         else:
-            print('passed')
+            # print('passed')
             return None
             # if page.navigation_bar.selected_index != 3:
             #     page.floating_action_button = None
@@ -329,7 +329,7 @@ def main(page: ft.Page):
             remaining_children_traffic.remove(e.control.data)
         else:
             remaining_children_traffic.append(e.control.data)
-        print(remaining_children_traffic)
+        # print(remaining_children_traffic)
 
     def update_modulecheck(mentor_id, module_name):
         query = "SELECT name from mentors WHERE id = %s"
@@ -410,7 +410,7 @@ def main(page: ft.Page):
     def get_showqr(group_num: str):
         query = "SELECT * FROM children WHERE group_num = %s AND status != 'active'"
         children_list = make_db_request(query, (group_num, ), get_many=True)
-        print(children_list)
+        # print(children_list)
         if children_list is not None:
             if children_list:
                 col = ft.Column()
@@ -486,7 +486,8 @@ def main(page: ft.Page):
             ]
             page.add(module_traffic_col)
         else:
-            print("err 1")
+            pass
+            # print("err 1")
 
     if platform.system() == "Windows":
         # page.route = "/modulecheck?mentor_id=1&module_id=1"
@@ -495,7 +496,8 @@ def main(page: ft.Page):
 
     current_url = urlparse(page.route)
     url_params = parse_qs(current_url.query)
-    print(current_url.path)
+    pass
+    # print(current_url.path)
     page.appbar = appbar
     if current_url.path == '/':
         page.navigation_bar = navbar
@@ -526,5 +528,6 @@ if __name__ == "__main__":
         assets_dir='assets',
         upload_dir='assets/uploads',
         use_color_emoji=True,
+        view=ft.AppView.WEB_BROWSER,
         port=8001
     )
