@@ -73,6 +73,7 @@ months = {
 def get_text_link(title: str, link: str):
     return f"<a href='{link}'>{title}</a>"
 
+
 async def is_pass_phrase_ok(table: str, pass_phrase: str):
     query = f"SELECT COUNT(*) as count FROM {table} WHERE pass_phrase = %s"
     db.connect()
@@ -97,7 +98,6 @@ async def is_registered(telegram_id: int):
     db.connect()
     result = db.execute_query(query, (telegram_id, telegram_id, telegram_id, telegram_id,))
     db.disconnect()
-    # print("REGISTERED:", result)
     if result is None:
         return False
     return True
@@ -108,7 +108,6 @@ async def get_user_info(telegram_id: int, group: str):
     db.connect()
     result = db.execute_query(query, (telegram_id,))
     db.disconnect()
-    # print("REGISTERED:", result)
     return result
 
 
@@ -127,6 +126,28 @@ async def get_user_status(telegram_id: int):
     db.disconnect()
     user_status = user_status['status'] if user_status else None
     return user_status
+
+
+async def get_module_list(callback: types.CallbackQuery):
+    query = "SELECT * FROM modules WHERE status = 'active'"
+    db.connect()
+    modules = db.execute_query(query, many=True)
+    db.disconnect()
+    if len(modules) > 0:
+        await callback.message.delete()
+        btns_builder = keyboard.InlineKeyboardBuilder()
+        for module in modules:
+            btns_builder.button(text=module['name'], callback_data=SelectModuleCallbackFactory(module_id=module['id'], name=module['name']))
+        btns_builder.adjust(2)
+        await callback.message.answer(
+            text="<b>Выберите модуль для просмотра списка участников</b>",
+            reply_markup=btns_builder.as_markup()
+        )
+    else:
+        await callback.answer(
+            text="Активные модули отсутствуют",
+            show_alert=True
+        )
 
 
 async def send_hello(telegram_id: int, table: str):
@@ -282,7 +303,6 @@ async def deep_linking(message: Message, command: CommandObject):
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     telegram_id = message.chat.id
-    print(message.from_user.url)
     message_text = {
         'children': "<b>Ты в главном меню, выбери, что хочешь сделать</b>",
         'mentors': "<b>Выберите требуемое действие</b>",
@@ -474,31 +494,13 @@ async def callbacks_mentors(callback: types.CallbackQuery, callback_data: Mentor
                     show_alert=True
                 )
         elif action == "modules_list":
-            query = "SELECT * FROM modules WHERE status = 'active'"
-            db.connect()
-            modules = db.execute_query(query, many=True)
-            if len(modules) > 0:
-                await callback.message.delete()
-                btns_builder = keyboard.InlineKeyboardBuilder()
-                for module in modules:
-                    btns_builder.button(text=module['name'], callback_data=SelectModuleCallbackFactory(module_id=module['id'], name=module['name']))
-                btns_builder.adjust(2)
-                await callback.message.answer(
-                    text="<b>Выберите модуль для просмотра списка участников</b>",
-                    reply_markup=btns_builder.as_markup()
-                )
-            else:
-                await callback.answer(
-                    text="Активные модули отсутствуют",
-                    show_alert=True
-                )
-            db.disconnect()
+            await get_module_list(callback)
         elif action == "qrc":
             await callback.message.delete()
             btn = keyboard.InlineKeyboardBuilder().button(
                 text="Показать QR-коды #️⃣",
                 web_app=types.WebAppInfo(
-                    url=f"{base_crod_url}/connect/showqr?group_id={user_info['group_num']}"
+                    url=f"{base_crod_url}/connect/showqr?target={'children'}&value={user_info['group_num']}"
                 )
             )
             await callback.message.answer(
@@ -694,28 +696,11 @@ async def callbacks_radio(callback: types.CallbackQuery, callback_data: RadioReq
 @dp.callback_query(AdminsCallbackFactory.filter())
 async def callbacks_admins(callback: types.CallbackQuery, callback_data: AdminsCallbackFactory, state: FSMContext):
     action = callback_data.action
-    user_info = await get_user_info(callback.from_user.id, 'children')
+    user_info = await get_user_info(callback.from_user.id, 'admins')
     if user_info['status'] == 'active':
-        if action == "feedback":
-            query = "SELECT * FROM modules WHERE status = 'active'"
-            db.connect()
-            modules = db.execute_query(query, many=True)
-            if len(modules) > 0:
-                await callback.message.delete()
-                btns_builder = keyboard.InlineKeyboardBuilder()
-                for module in modules:
-                    btns_builder.button(text=module['name'], callback_data=GetModuleFeedbackCallbackFactory(module_id=module['id'], name=module['name']))
-                btns_builder.adjust(2)
-                await callback.message.answer(
-                    text="<b>Выберите модуль для получения списка обратной связи</b>",
-                    reply_markup=btns_builder.as_markup()
-                )
-            else:
-                await callback.answer(
-                    text="Активные модули отсутствуют",
-                    show_alert=True
-                )
-            db.disconnect()
+        if action == "modules_list":
+            await get_module_list(callback)
+
 
     else:
         await callback.answer(
@@ -807,12 +792,10 @@ async def callbacks_children(callback: types.CallbackQuery, callback_data: Feedb
 async def create_feedback_proccess(user_info: [], callback: types.CallbackQuery, call_type: str = "new"):
     feedback_temp_data_dict[user_info['id']] = {}
 
-
     query = "SELECT * FROM modules WHERE id IN (SELECT module_id FROM modules_records WHERE child_id = %s) AND id NOT IN (SELECT module_id FROM feedback WHERE child_id = %s AND date = %s)"
     db.connect()
     need_to_give_feedback_list = db.execute_query(query, (user_info['id'], user_info['id'], datetime.datetime.now().date(),), many=True)
     if len(need_to_give_feedback_list) > 0:
-        # await callback.message.delete()
         module = need_to_give_feedback_list[0]
         feedback_temp_data_dict[user_info['id']]['module_id'] = module['id']
         feedback_temp_data_dict[user_info['id']]['module_name'] = module['name']
@@ -929,8 +912,8 @@ async def stop_feedback():
                         f"\n\nОбратная связь по вашему модулю за {date}",
                 reply_markup=kb_hello['mentors'].as_markup()
             )
-            # if os.path.exists(filepath):
-            #     os.remove(filepath)
+            if os.path.exists(filepath):
+                os.remove(filepath)
         else:
             await bot.send_message(
                 chat_id=teacher['telegram_id'],
