@@ -50,9 +50,11 @@ def convert_to_pdf(filepath: str):
     file_api = groupdocs_conversion_cloud.FileApi.from_config(configuration)
     request = groupdocs_conversion_cloud.DownloadFileRequest(f"converted\\{filepath}.pdf", my_storage)
     response = file_api.download_file(request)
+    response.replace('\\', '/')
     print(response)
     print(f"{current_directory}/generated")
     shutil.move(response, f"{current_directory}/generated")
+    print(os.listdir(f"{current_directory}/generated"))
 
     if os.path.exists(docx_file):
         os.remove(docx_file)
