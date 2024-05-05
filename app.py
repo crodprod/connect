@@ -13,8 +13,6 @@ from urllib.parse import urlparse, parse_qs
 from requests import post
 
 from flet_elements.tabs import tabs_config
-from flet_elements.navigation_bar import navbar
-from flet_elements.appbar import appbar
 from flet_elements.screens import screens
 
 os.environ['FLET_WEB_APP_PATH'] = '/connect'
@@ -46,6 +44,7 @@ def create_db_connection():
 
 
 def main(page: ft.Page):
+    # Настройки оформления страницы
     page.vertical_alignment = ft.MainAxisAlignment.CENTER,
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
     page.title = "Connect"
@@ -56,25 +55,23 @@ def main(page: ft.Page):
             primary=ft.colors.WHITE
         )
     )
-    page.window_width = 377
-    page.window_height = 768
     page.fonts = {
         "Geologica": "fonts/Geologica.ttf",
     }
-    page.appbar = ft.AppBar(
-        center_title=False,
-        title=ft.Text(size=20, weight=ft.FontWeight.W_500),
-        bgcolor=ft.colors.SURFACE_VARIANT
-    )
+
+    # структры для хранения информации
     remaining_children_traffic = []
 
     def send_telegam_message(tID, message_text):
+        # отправка текстовых сообщений в телеграмм
+
         url = f'https://api.telegram.org/bot{os.getenv("BOT_TOKEN")}/sendMessage'
         data = {'chat_id': tID, 'text': message_text, "parse_mode": "Markdown"}
-        response = post(url=url, data=data)
-        # print(response.json())
+        post(url=url, data=data)
 
     def make_db_request(sql_query: str, params: tuple = (), get_many: bool = None, put_many: bool = None):
+        # обработка sql-запросов
+        # to-do - сообщение об ошибке
         connection, cur = create_db_connection()
         if connection is not None:
             logging.info(f"DATABASE REQUEST: query: {sql_query}, params: {params}")
@@ -95,7 +92,6 @@ def main(page: ft.Page):
                 connection.commit()
                 return data
             except Exception as e:
-                # print(e)
                 return None
                 # elements.global_vars.DB_FAIL = True
                 # logging.error(f"DATABASE REQUEST: {e}\n{sql_query}{params}")
@@ -105,7 +101,6 @@ def main(page: ft.Page):
                 #     elements.global_vars.DB_FAIL = False
                 # return None
         else:
-            # print('passed')
             return None
             # if page.navigation_bar.selected_index != 3:
             #     page.floating_action_button = None
@@ -114,20 +109,33 @@ def main(page: ft.Page):
             #     return None
 
     def change_screen(target: str, params: [] = None):
+        # изменение экрана
+
         page.controls.clear()
         page.floating_action_button = None
-        page.navigation_bar = None
-        page.scroll = None
+
         page.appbar.title.value = screens[target]['title']
-        # print(screens[target]['title'])
+        page.scroll = screens[target]['scroll']
+
         if target == "login":
-            pass
+            page.navigation_bar.visible = False
+
         elif target == "main":
             change_navbar_tab(0)
+
         elif target == "showqr":
-            get_showqr(group_num=params['group_id'][0])
+            page.navigation_bar.visible = False
+            get_showqr(
+                target=params['target'][0],
+                value=params['value'][0]
+            )
+
         elif target == "modulecheck":
-            get_modulecheck(mentor_id=params['mentor_id'][0], module_id=params['module_id'][0])
+            page.navigation_bar.visible = False
+            get_modulecheck(
+                mentor_id=params['mentor_id'][0],
+                module_id=params['module_id'][0]
+            )
 
     def change_navbar_tab(e):
         if type(e) == int:
@@ -136,28 +144,37 @@ def main(page: ft.Page):
             tab_index = e.control.selected_index
 
         page.controls.clear()
-        # page.appbar.leading = ft.IconButton(
-        #     icon=screens['main']['lead_icon'],
-        #     on_click=lambda _: change_screen('login'),
-        #     rotate=math.pi
-        # )
-        # page.appbar.title.value = tabs_config[tab_index]['title']
+        page.appbar.title.value = tabs_config[tab_index]['title']
         page.scroll = tabs_config[tab_index]['scroll']
-        # page.appbar.actions = [
-        #     ft.Container(
-        #         ft.Row(tabs_config[tab_index]['actions']),
-        #         margin=ft.margin.only(right=15)
-        #     )
-        # ]
 
         if tab_index == 0:
             page.add(settings_col)
         elif tab_index == 1:
-            pass
+            page.add(ft.Text("Экран 2"))
         elif tab_index == 2:
-            pass
+            page.add(ft.Text("Экран 3"))
+        elif tab_index == 3:
+            page.add(ft.Text("Экран 4"))
 
         page.update()
+
+    # элементы интерфейса
+
+    page.appbar = ft.AppBar(
+        center_title=False,
+        title=ft.Text(size=20, weight=ft.FontWeight.W_500),
+        bgcolor=ft.colors.SURFACE_VARIANT
+    )
+    page.navigation_bar = ft.NavigationBar(
+        destinations=[
+            ft.NavigationDestination(icon=tabs_config[0]['icon'], label=tabs_config[0]['title']),
+            ft.NavigationDestination(icon=tabs_config[1]['icon'], label=tabs_config[1]['title']),
+            ft.NavigationDestination(icon=tabs_config[2]['icon'], label=tabs_config[2]['title']),
+            ft.NavigationDestination(icon=tabs_config[3]['icon'], label=tabs_config[3]['title']),
+        ],
+        adaptive=True,
+        on_change=change_navbar_tab
+    )
 
     module_traffic_col = ft.Column(width=600)
 
@@ -283,6 +300,7 @@ def main(page: ft.Page):
         horizontal_alignment=ft.CrossAxisAlignment.CENTER
     )
 
+    # Диалоги
     dialog_info = ft.AlertDialog(
         modal=True,
         title=ft.Row(
@@ -303,11 +321,11 @@ def main(page: ft.Page):
         modal=True,
         actions_alignment=ft.MainAxisAlignment.END,
         actions=[
-            ft.ElevatedButton(text="Ссылка", icon=ft.icons.COPY_ROUNDED, color=ft.colors.WHITE),
-            ft.ElevatedButton(text="Закрыть", on_click=lambda _: close_dialog(dialog_qr), color=ft.colors.WHITE)
+            ft.ElevatedButton(text="Скопировать", icon=ft.icons.COPY_ROUNDED, color=ft.colors.WHITE)
         ]
     )
 
+    # Функции
     def open_dialog(dialog: ft.AlertDialog):
         page.dialog = dialog
         dialog.open = True
@@ -385,65 +403,78 @@ def main(page: ft.Page):
         page.update()
 
     def copy_qr_link(link):
+        # копирование пригласительной ссылки
+
         page.set_clipboard(link)
         close_dialog(dialog_qr)
         open_sb("Ссылка скопирована")
 
     def show_qr(phrase: str):
+        # показ диалога с qr-кодом
 
         qr_path = f"assets/qrc/{phrase}.png"
         link = f"https://t.me/crod_connect_bot?start={phrase}"
+        qr_img = qrcode.make(data=link)
+        qr_img.save(qr_path)
 
-        if phrase.split('_')[1] == "None":
-            dialog_qr.content = ft.Text("Для данного пользователя не задана ключ-фраза", size=18)
-        else:
-            qr_img = qrcode.make(data=link)
-            qr_img.save(qr_path)
-        dialog_qr.content = ft.Column(
-            [
-                ft.Container(
-                    ft.Image(src=f"qrc/{phrase}.png", border_radius=ft.border_radius.all(10)), width=300),
-            ],
-            # width=350,
-            height=350,
-            alignment=ft.MainAxisAlignment.CENTER,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER
-        )
+        dialog_qr.content = ft.Image(src=f"qrc/{phrase}.png", border_radius=ft.border_radius.all(10))
 
         dialog_qr.actions[0].on_click = lambda _: copy_qr_link(link)
         page.dialog = dialog_qr
         dialog_qr.open = True
         page.update()
 
-    def get_showqr(group_num: str):
-        query = "SELECT * FROM children WHERE group_num = %s AND status != 'active'"
-        children_list = make_db_request(query, (group_num,), get_many=True)
-        # print(children_list)
-        if children_list is not None:
-            if children_list:
-                col = ft.Column(width=600)
-                children_col = ft.Column(width=600)
-                for child in children_list:
-                    children_col.controls.append(
-                        ft.TextButton(content=ft.Text(child['name'], size=18, weight=ft.FontWeight.W_300), on_click=lambda _: show_qr(f"children_{child['pass_phrase']}"))
+    def get_showqr(target: str, value: str = ""):
+        titles = {
+            'admins': "Администрация",
+            'mentors': "Воспитатели",
+            'teachers': "Преподаватели"
+        }
+
+        if target == "children":
+            query = "SELECT * FROM children WHERE group_num = %s AND status != 'active'"
+            params = (value,)
+            group_title = f"Группа №{value}"
+        else:
+            query = f"SELECT * FROM {target} WHERE status != %s"
+            params = ('active', )
+            group_title = f"{titles[target]}"
+
+        users_list = make_db_request(query, params, get_many=True)
+        if users_list is not None:
+            if users_list:
+                qr_screen_col = ft.Column(width=600)
+                users_col = ft.Column(width=600)
+
+                for user in users_list:
+                    users_col.controls.append(
+                        ft.TextButton(
+                            content=ft.Text(
+                                value=user['name'],
+                                size=18,
+                                weight=ft.FontWeight.W_300
+                            ),
+                            on_click=lambda _: show_qr(f"{target}_{user['pass_phrase']}")
+                        )
                     )
-                    children_col.controls.append(ft.Divider(thickness=1))
-                col.controls = [
+                    users_col.controls.append(ft.Divider(thickness=1))
+
+                qr_screen_col.controls = [
                     ft.Card(
                         ft.Container(
                             ft.Column(
-                                [ft.Text(f"Список детей без QR-кодов\nГруппа №{group_num}", size=18, weight=ft.FontWeight.W_500)],
+                                [ft.Text(f"{group_title}", size=18, weight=ft.FontWeight.W_500)],
                                 width=page.width
                             ),
                             padding=15
                         )
                     ),
-                    children_col
+                    users_col
                 ]
-                page.add(col)
+                page.add(qr_screen_col)
             else:
                 dialog_info.title.controls[0].content.value = "QR-коды"
-                dialog_info.content = ft.Text(f"В вашей группе все дети зарегистрированы", size=18, width=600)
+                dialog_info.content = ft.Text(f"В группе «{group_title}» все пользователи зарегистрированы", size=18, width=600)
                 open_dialog(dialog_info)
 
     def get_modulecheck(mentor_id: str, module_id: str):
@@ -475,7 +506,7 @@ def main(page: ft.Page):
                 ft.Card(
                     ft.Container(
                         ft.Column(
-                            [ft.Text(f"Модуль\n{module_info['name']}", size=18, weight=ft.FontWeight.W_500)],
+                            [ft.Text(f"{module_info['name']}", size=18, weight=ft.FontWeight.W_500)],
                             width=page.width
                         ),
                         padding=15
@@ -494,29 +525,38 @@ def main(page: ft.Page):
             pass
 
     if platform.system() == "Windows":
+        page.window_width = 377
+        page.window_height = 768
         page.route = "/modulecheck?mentor_id=1&module_id=1"
-        # page.route = "/showqr?group_id=1"
-        # page.route = "/"
+        # page.route = "/showqr?target=mentors&value=-1"
 
+    # Точка входа
     current_url = urlparse(page.route)
     url_params = parse_qs(current_url.query)
     if current_url.path == '/':
-        # page.navigation_bar = navbar
-        # page.navigation_bar.on_change = change_navbar_tab
         change_screen("main")
+
     elif current_url.path == '/modulecheck':
+        # Отметка посещаемости
         change_screen("modulecheck", url_params)
+
     elif current_url.path == '/showqr':
+        # Список qr-кодов
         change_screen("showqr", url_params)
+
     page.update()
 
 
 if __name__ == "__main__":
-    ft.app(
-        target=main,
-        assets_dir='assets',
-        # upload_dir='assets/uploads',
-        use_color_emoji=True,
-        view=ft.AppView.WEB_BROWSER,
-        port=8001
-    )
+    if platform.system() == "Windows":
+        ft.app(
+            target=main,
+            assets_dir='assets'
+        )
+    else:
+        ft.app(
+            target=main,
+            assets_dir='assets',
+            view=ft.AppView.WEB_BROWSER,
+            port=8001
+        )
