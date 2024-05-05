@@ -50,6 +50,8 @@ def convert_to_pdf(filepath: str):
     file_api = groupdocs_conversion_cloud.FileApi.from_config(configuration)
     request = groupdocs_conversion_cloud.DownloadFileRequest(f"converted\\{filepath}.pdf", my_storage)
     response = file_api.download_file(request)
+    print(response)
+    print(f"{current_directory}/generated")
     shutil.move(response, f"{current_directory}/generated")
 
     if os.path.exists(docx_file):
@@ -57,7 +59,7 @@ def convert_to_pdf(filepath: str):
 
 
 def get_grouplist(group_list: [], group_num: int):
-    filename = f"grouplist_{group_num}_{datetime.now().date().strftime('%d_%m_%Y')}"
+    filename = f"grouplist_{group_num}_{datetime.now().date().strftime('%d%m%Y')}"
     data = []
     for child in group_list:
         data.append(
