@@ -8,3 +8,4 @@ APScheduler==3.10.4
 qrcode==7.4.2
 django-qrcode==0.3
 requests==2.31.0
+pypandoc==1.13

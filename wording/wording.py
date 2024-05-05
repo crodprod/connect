@@ -1,4 +1,5 @@
 import os
+import platform
 
 import docx
 from docx.enum.table import WD_ALIGN_VERTICAL
@@ -7,6 +8,7 @@ from docx.shared import Pt
 from docxtpl import DocxTemplate
 from datetime import datetime
 from docx2pdf import convert as pdf_convert
+from pypandoc import convert_file
 
 current_directory = os.path.dirname(os.path.abspath(__file__))
 parent_directory = os.path.dirname(current_directory)
@@ -31,10 +33,19 @@ def convert_to_pdf(filepath: str):
     with open(pdf_file, mode="w") as file:
         file.close()
 
-    pdf_convert(
-        input_path=docx_file,
-        output_path=pdf_file
-    )
+    if platform.system() == "Winndows":
+        pdf_convert(
+            input_path=docx_file,
+            output_path=pdf_file
+        )
+    else:
+        convert_file(
+            source_file=docx_file,
+            to='pdf',
+            outputfile=pdf_file
+        )
+
+
     if os.path.exists(docx_file):
         os.remove(docx_file)
 
