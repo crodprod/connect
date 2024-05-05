@@ -463,7 +463,7 @@ async def callbacks_mentors(callback: types.CallbackQuery, callback_data: Mentor
                 await callback.message.delete()
                 text = f"<b>Список именинников</b>\n\n"
                 for child in birth_list:
-                    text += f"{child['name']} ({child['birth'].day} {months[child['birth'].month]})"
+                    text += f"{child['name']} ({child['birth'].day} {months[child['birth'].month]})\n"
                 await callback.message.answer(
                     text=text,
                     reply_markup=kb_hello['mentors'].as_markup()

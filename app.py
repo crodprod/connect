@@ -61,7 +61,11 @@ def main(page: ft.Page):
     page.fonts = {
         "Geologica": "fonts/Geologica.ttf",
     }
-
+    page.appbar = ft.AppBar(
+        center_title=False,
+        title=ft.Text(size=20, weight=ft.FontWeight.W_500),
+        bgcolor=ft.colors.SURFACE_VARIANT
+    )
     remaining_children_traffic = []
 
     def send_telegam_message(tID, message_text):
@@ -109,16 +113,21 @@ def main(page: ft.Page):
             #     elements.global_vars.DB_FAIL = False
             #     return None
 
-    def change_screen(target: str):
+    def change_screen(target: str, params: [] = None):
         page.controls.clear()
         page.floating_action_button = None
         page.navigation_bar = None
         page.scroll = None
-
+        page.appbar.title.value = screens[target]['title']
+        print(screens[target]['title'])
         if target == "login":
             pass
         elif target == "main":
             change_navbar_tab(0)
+        elif target == "showqr":
+            get_showqr(group_num=params['group_id'][0])
+        elif target == "modulecheck":
+            get_modulecheck(mentor_id=params['mentor_id'][0], module_id=params['module_id'][0])
 
     def change_navbar_tab(e):
         if type(e) == int:
@@ -150,7 +159,7 @@ def main(page: ft.Page):
 
         page.update()
 
-    module_traffic_col = ft.Column()
+    module_traffic_col = ft.Column(width=600)
 
     settings_col = ft.Column(
         controls=[
@@ -284,7 +293,6 @@ def main(page: ft.Page):
         )
     )
 
-
     dialog_qr = ft.AlertDialog(
         title=ft.Row(
             [
@@ -409,15 +417,15 @@ def main(page: ft.Page):
 
     def get_showqr(group_num: str):
         query = "SELECT * FROM children WHERE group_num = %s AND status != 'active'"
-        children_list = make_db_request(query, (group_num, ), get_many=True)
+        children_list = make_db_request(query, (group_num,), get_many=True)
         # print(children_list)
         if children_list is not None:
             if children_list:
-                col = ft.Column()
-                children_col = ft.Column()
+                col = ft.Column(width=600)
+                children_col = ft.Column(width=600)
                 for child in children_list:
                     children_col.controls.append(
-                        ft.TextButton(content=ft.Text(child['name'], size=18, weight=ft.FontWeight.W_300), on_click=lambda _:show_qr(f"children_{child['pass_phrase']}"))
+                        ft.TextButton(content=ft.Text(child['name'], size=18, weight=ft.FontWeight.W_300), on_click=lambda _: show_qr(f"children_{child['pass_phrase']}"))
                     )
                     children_col.controls.append(ft.Divider(thickness=1))
                 col.controls = [
@@ -428,8 +436,7 @@ def main(page: ft.Page):
                                 width=page.width
                             ),
                             padding=15
-                        ),
-                        # elevation=10
+                        )
                     ),
                     children_col
                 ]
@@ -440,8 +447,6 @@ def main(page: ft.Page):
                 open_dialog(dialog_info)
 
     def get_modulecheck(mentor_id: str, module_id: str):
-        mentor_id = int(mentor_id)
-        module_id = int(module_id)
 
         query = "SELECT name FROM modules WHERE id = %s"
         module_info = make_db_request(query, (module_id,), get_many=False)
@@ -450,7 +455,7 @@ def main(page: ft.Page):
         children_list = make_db_request(query, (module_id,), get_many=True)
         if children_list is not None:
 
-            children_list_col = ft.Column()
+            children_list_col = ft.Column(width=600)
             for child in children_list:
                 remaining_children_traffic.append(child['id'])
                 children_list_col.controls.append(
@@ -487,37 +492,22 @@ def main(page: ft.Page):
             page.add(module_traffic_col)
         else:
             pass
-            # print("err 1")
 
-    # if platform.system() == "Windows":
-    #     page.route = "/modulecheck?mentor_id=1&module_id=1"
-    #     page.route = "/showqr?group_id=1"
-    #     page.route = "/"
+    if platform.system() == "Windows":
+        page.route = "/modulecheck?mentor_id=1&module_id=1"
+        # page.route = "/showqr?group_id=1"
+        # page.route = "/"
 
     current_url = urlparse(page.route)
     url_params = parse_qs(current_url.query)
-
-    # page.appbar = appbar
     if current_url.path == '/':
-        page.navigation_bar = navbar
-        page.navigation_bar.on_change = change_navbar_tab
-        # page.appbar.title.value = "Тест"
-        # page.appbar.leading = ft.IconButton(
-        #     icon=screens['main']['lead_icon'],
-        #     on_click=lambda _: change_screen('login'),
-        #     rotate=math.pi
-        # )
-        change_navbar_tab(0)
+        # page.navigation_bar = navbar
+        # page.navigation_bar.on_change = change_navbar_tab
+        change_screen("main")
     elif current_url.path == '/modulecheck':
-        page.scroll = ft.ScrollMode.HIDDEN
-        # page.appbar.title.value = "Посещаемость"
-        # page.appbar.bgcolor = ft.colors.SURFACE_VARIANT
-        get_modulecheck(mentor_id=url_params['mentor_id'][0], module_id=url_params['module_id'][0])
+        change_screen("modulecheck", url_params)
     elif current_url.path == '/showqr':
-        page.scroll = ft.ScrollMode.HIDDEN
-        # page.appbar.title.value = "QR-коды"
-        # page.appbar.bgcolor = ft.colors.SURFACE_VARIANT
-        get_showqr(group_num=url_params['group_id'][0])
+        change_screen("showqr", url_params)
     page.update()
 
 
@@ -527,6 +517,6 @@ if __name__ == "__main__":
         assets_dir='assets',
         # upload_dir='assets/uploads',
         use_color_emoji=True,
-        # view=ft.AppView.WEB_BROWSER,
+        view=ft.AppView.WEB_BROWSER,
         port=8001
     )

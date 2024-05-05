@@ -12,20 +12,15 @@ screens = {
         "lead_icon": None,
         "target": ""
     },
-    "import_themes": {
-        "title": "Импорт тем",
-        "lead_icon": icons.ARROW_BACK_ROUNDED,
-        "target": "main"
+    "showqr": {
+        "title": "QR-коды",
+        "lead_icon": None,
+        "target": ""
 
     },
-    "add_jury": {
-        "title": "Новое жюри",
-        "lead_icon": icons.ARROW_BACK_ROUNDED,
-        "target": "main"
-    },
-    "view_group": {
-        'title': "Обзор группы",
-        "lead_icon": icons.ARROW_BACK_ROUNDED,
-        "target": "main"
+    "modulecheck": {
+        "title": "Посещаемость",
+        "lead_icon": None,
+        "target": ""
     }
 }
