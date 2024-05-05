@@ -119,7 +119,7 @@ def main(page: ft.Page):
         page.navigation_bar = None
         page.scroll = None
         page.appbar.title.value = screens[target]['title']
-        print(screens[target]['title'])
+        # print(screens[target]['title'])
         if target == "login":
             pass
         elif target == "main":
