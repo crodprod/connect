@@ -42,17 +42,17 @@ def convert_to_pdf(filepath: str):
     settings = groupdocs_conversion_cloud.ConvertSettings()
     settings.file_path = f"{filepath}.docx"
     settings.format = "pdf"
-    settings.output_path = "converted"
+    settings.output_path = ""
 
     request = groupdocs_conversion_cloud.ConvertDocumentRequest(settings)
     convert_api.convert_document(request)
 
     file_api = groupdocs_conversion_cloud.FileApi.from_config(configuration)
-    request = groupdocs_conversion_cloud.DownloadFileRequest(f"converted\\{filepath}.pdf", my_storage)
+    request = groupdocs_conversion_cloud.DownloadFileRequest(f"{filepath}.pdf", my_storage)
     response = file_api.download_file(request)
-    response.replace('\\\\', '/')
     print(response)
     print(f"{current_directory}/generated")
+
     shutil.move(response, f"{current_directory}/generated")
     print(os.listdir(f"{current_directory}/generated"))
 
