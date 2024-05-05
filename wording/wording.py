@@ -8,7 +8,7 @@ from docx.shared import Pt
 from docxtpl import DocxTemplate
 from datetime import datetime
 from docx2pdf import convert as pdf_convert
-from pypandoc import convert_file
+from pypandoc import convert_file, download_pandoc
 
 current_directory = os.path.dirname(os.path.abspath(__file__))
 parent_directory = os.path.dirname(current_directory)
@@ -39,6 +39,7 @@ def convert_to_pdf(filepath: str):
             output_path=pdf_file
         )
     else:
+        download_pandoc()
         convert_file(
             source_file=docx_file,
             to='pdf',
