@@ -927,7 +927,7 @@ def main(page: ft.Page):
     current_url = urlparse(page.route)
     url_params = parse_qs(current_url.query)
     if current_url.path == '/':
-        change_screen("mentors")
+        change_screen("login")
 
     elif current_url.path == '/modulecheck':
         # Отметка посещаемости
