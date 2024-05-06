@@ -141,6 +141,7 @@ def main(page: ft.Page):
 
         page.controls.clear()
         page.appbar.leading = None
+        page.appbar.visible = True
 
         if screens[target]['lead_icon'] is not None:
             page.appbar.leading = ft.IconButton(
@@ -152,8 +153,8 @@ def main(page: ft.Page):
         page.scroll = screens[target]['scroll']
 
         if target == "login":
-            pass
-            # page.navigation_bar.visible = False
+            page.appbar.visible = False
+            page.add(ft.Container(login_col, expand=True))
 
         elif target == "main":
             page.add(main_menu_col)
@@ -256,6 +257,18 @@ def main(page: ft.Page):
 
         page.update()
 
+    def login():
+        query = "SELECT * FROM admins WHERE password = %s"
+        admin_info = make_db_request(query, (password_field.value, ), get_many=True)
+        if admin_info is not None:
+            if admin_info:
+                name = " ".join(admin_info[0]['name'].split(" ")[1:])
+                open_sb(f"Здравствуйте, {name}")
+                change_screen("main")
+            else:
+                open_sb("Неверный код доступа", ft.colors.RED)
+        page.update()
+
     def change_navbar_tab(e):
         if type(e) == int:
             tab_index = e
@@ -284,16 +297,6 @@ def main(page: ft.Page):
         title=ft.Text(size=20, weight=ft.FontWeight.W_500)
         # bgcolor=ft.colors.SURFACE_VARIANT
     )
-    # page.navigation_bar = ft.NavigationBar(
-    #     destinations=[
-    #         ft.NavigationDestination(icon=tabs_config[0]['icon'], label=tabs_config[0]['title']),
-    #         ft.NavigationDestination(icon=tabs_config[1]['icon'], label=tabs_config[1]['title']),
-    #         ft.NavigationDestination(icon=tabs_config[2]['icon'], label=tabs_config[2]['title']),
-    #         ft.NavigationDestination(icon=tabs_config[3]['icon'], label=tabs_config[3]['title']),
-    #     ],
-    #     adaptive=True,
-    #     on_change=change_navbar_tab
-    # )
 
     module_traffic_col = ft.Column(width=600)
 
@@ -330,10 +333,9 @@ def main(page: ft.Page):
                         title=ft.Text(menu_tabs_config[3]['title'], size=20, weight=ft.FontWeight.W_400)
                     ),
                     on_click=lambda _: change_screen("settings")),
-                width=600),
-            ft.Text("CROD.CONNECT | created by lrrrtm")
+                width=600)
         ],
-        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        horizontal_alignment=ft.CrossAxisAlignment.START,
     )
 
     settings_col = ft.Column(
@@ -455,6 +457,30 @@ def main(page: ft.Page):
                 width=600,
             ),
         ],
+        horizontal_alignment=ft.CrossAxisAlignment.CENTER
+    )
+
+    password_field = ft.TextField(
+        label="Код доступа", text_align=ft.TextAlign.CENTER,
+        width=250,
+        height=70,
+        on_submit=lambda _: login(),
+        password=True
+    )
+    button_login = ft.ElevatedButton("Войти", width=250, on_click=lambda _: login(),
+                                     disabled=False, height=50,
+                                     icon=ft.icons.KEYBOARD_ARROW_RIGHT_ROUNDED)
+
+    login_col = ft.Column(
+        controls=[
+            ft.Image(
+                src='icons/loading-animation.png',
+                height=200,
+            ),
+            password_field,
+            button_login
+        ],
+        alignment=ft.MainAxisAlignment.CENTER,
         horizontal_alignment=ft.CrossAxisAlignment.CENTER
     )
 
@@ -692,7 +718,7 @@ def main(page: ft.Page):
     current_url = urlparse(page.route)
     url_params = parse_qs(current_url.query)
     if current_url.path == '/':
-        change_screen("main")
+        change_screen("login")
 
     elif current_url.path == '/modulecheck':
         # Отметка посещаемости
