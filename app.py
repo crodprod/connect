@@ -406,6 +406,7 @@ def main(page: ft.Page):
             page.add(ft.Container(col, expand=True))
 
         elif target == "add_admin":
+            new_admin_name_field.value = None
             col = ft.Column(
                 controls=[
                     new_admin_name_field,
