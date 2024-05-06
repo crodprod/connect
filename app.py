@@ -121,18 +121,31 @@ def main(page: ft.Page):
         else:
             print('err 1')
 
-    def get_menu_card(title: str, subtitle: str, icon, target_screen: str):
-        card = ft.Card(
-            ft.Container(
-                ft.ListTile(
-                    title=ft.Text(title),
-                    subtitle=ft.Text(subtitle),
-                    leading=ft.Icon(icon)
+    def get_menu_card(title: str, subtitle: str, icon, target_screen: str = "", type: str = ""):
+        if type != "":
+            card = ft.Card(
+                ft.Container(
+                    ft.ListTile(
+                        title=ft.Text(title),
+                        subtitle=ft.Text(subtitle),
+                        leading=ft.Icon(icon)
+                    ),
+                    on_click=lambda _: open_confirmation(type)
                 ),
-                on_click=lambda _:change_screen(target_screen)
-            ),
-            width=600
-        )
+                width=600
+            )
+        else:
+            card = ft.Card(
+                ft.Container(
+                    ft.ListTile(
+                        title=ft.Text(title),
+                        subtitle=ft.Text(subtitle),
+                        leading=ft.Icon(icon)
+                    ),
+                    on_click=lambda _: change_screen(target_screen)
+                ),
+                width=600
+            )
 
         return card
 
@@ -166,7 +179,7 @@ def main(page: ft.Page):
                         title="Обновление списка",
                         subtitle="Загрузка таблицы с информацией о детях",
                         icon=ft.icons.UPLOAD_FILE,
-                        target_screen="main"
+                        type="upload_children"
                     )
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER
@@ -226,13 +239,14 @@ def main(page: ft.Page):
                         title="API-токен",
                         subtitle="Изменение токена телеграмм-бота",
                         icon=ft.icons.TELEGRAM,
-                        target_screen="main"
+                        # target_screen="main"
+                        type="edit_botapi"
                     ),
                     get_menu_card(
                         title="Параметры смены",
                         subtitle="Изменение параметров текущей смены или потока",
                         icon=ft.icons.MANAGE_ACCOUNTS,
-                        target_screen="main"
+                        type="edit_stream"
                     )
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER
@@ -257,12 +271,79 @@ def main(page: ft.Page):
 
         page.update()
 
+    def check_confirmation():
+        user_code = confirmation_code_field.value
+        close_dialog(dialog_confirmation)
+        if dialog_confirmation.data[0] == user_code:
+            open_sb("Действие подтверждено", ft.colors.GREEN)
+            print(f"confirmed_{dialog_confirmation.data[1]}")
+            # change_screen(f"confirmed_{dialog_confirmation.data[1]}")
+        else:
+            open_sb("Неверный код", ft.colors.RED)
+        confirmation_code_field.value = ""
+
+    def open_confirmation(action: str):
+        actions_descrition = {
+            'edit_botapi': {
+                'title': "API-токен"
+            },
+            'upload_children': {
+                'title': "Загрузка таблицы"
+            },
+            'edit_modules_count': {
+                'title': "Количество модулей"
+            },
+            'edit_stream': {
+                'title': "Параметры смены"
+            },
+        }
+
+        dialog_confirmation.title.controls[0].content.value = actions_descrition[action]['title']
+        confirmation_code = os.urandom(3).hex()
+        dialog_confirmation.data = [confirmation_code, action]
+        open_dialog(dialog_confirmation)
+        send_telegam_message(
+            password_field.data['telegram_id'],
+            "*Код подтверждения*"
+            f"\n\nДля подтверждения действия в Коннект введите `{confirmation_code}`"
+        )
+        # dialog_confirmation.content.controls[0].value = actions_descrition[action]['hint_text']
+
+    confirmation_code_field = ft.TextField(hint_text="Защитный код")
+
+    dialog_confirmation = ft.AlertDialog(
+        modal=True,
+        title=ft.Row(
+            [
+                ft.Container(ft.Text(size=20, weight=ft.FontWeight.W_400), expand=True),
+                ft.IconButton(ft.icons.CLOSE_ROUNDED, on_click=lambda _: close_dialog(dialog_confirmation))
+            ]
+        ),
+        content=ft.Column(
+            [
+                ft.Text("Для подтверждения действия введите защитный код из сообщения в телеграмме", size=18, weight=ft.FontWeight.W_200),
+                confirmation_code_field
+            ],
+            width=600,
+            height=180
+        ),
+        actions_alignment=ft.MainAxisAlignment.END,
+        actions=[
+            ft.FilledTonalButton(
+                text="Продолжить",
+                icon=ft.icons.ARROW_FORWARD_IOS,
+                on_click=lambda _: check_confirmation()
+            )
+        ]
+    )
+
     def login():
         query = "SELECT * FROM admins WHERE password = %s"
-        admin_info = make_db_request(query, (password_field.value, ), get_many=True)
+        admin_info = make_db_request(query, (password_field.value,), get_many=True)
         if admin_info is not None:
             if admin_info:
                 name = " ".join(admin_info[0]['name'].split(" ")[1:])
+                password_field.data = admin_info[0]
                 open_sb(f"Здравствуйте, {name}")
                 change_screen("main")
             else:
@@ -306,7 +387,7 @@ def main(page: ft.Page):
                 ft.Container(
                     content=ft.ListTile(
                         leading=ft.Icon(menu_tabs_config[0]['icon']),
-                        title=ft.Text(menu_tabs_config[0]['title'], size=20, weight=ft.FontWeight.W_400)
+                        title=ft.Text(menu_tabs_config[0]['title'], size=20, weight=ft.FontWeight.W_200)
                     ),
                     on_click=lambda _: change_screen("children")),
                 width=600),
@@ -314,7 +395,7 @@ def main(page: ft.Page):
                 ft.Container(
                     content=ft.ListTile(
                         leading=ft.Icon(menu_tabs_config[1]['icon']),
-                        title=ft.Text(menu_tabs_config[1]['title'], size=20, weight=ft.FontWeight.W_400)
+                        title=ft.Text(menu_tabs_config[1]['title'], size=20, weight=ft.FontWeight.W_200)
                     ),
                     on_click=lambda _: change_screen("modules")),
                 width=600),
@@ -322,7 +403,7 @@ def main(page: ft.Page):
                 ft.Container(
                     content=ft.ListTile(
                         leading=ft.Icon(menu_tabs_config[2]['icon']),
-                        title=ft.Text(menu_tabs_config[2]['title'], size=20, weight=ft.FontWeight.W_400)
+                        title=ft.Text(menu_tabs_config[2]['title'], size=20, weight=ft.FontWeight.W_200)
                     ),
                     on_click=lambda _: change_screen("mentors")),
                 width=600),
@@ -330,7 +411,7 @@ def main(page: ft.Page):
                 ft.Container(
                     content=ft.ListTile(
                         leading=ft.Icon(menu_tabs_config[3]['icon']),
-                        title=ft.Text(menu_tabs_config[3]['title'], size=20, weight=ft.FontWeight.W_400)
+                        title=ft.Text(menu_tabs_config[3]['title'], size=20, weight=ft.FontWeight.W_200)
                     ),
                     on_click=lambda _: change_screen("settings")),
                 width=600)
