@@ -16,7 +16,6 @@ from datetime import datetime
 current_directory = os.path.dirname(os.path.abspath(__file__))
 parent_directory = os.path.dirname(current_directory)
 
-
 # to-do:
 # Заменить конвертирование pdf на другой модуль
 
@@ -26,6 +25,7 @@ groups_dict = {
     "mentors": "Воспитатели",
     "teachers": "Преподаватели"
 }
+
 
 def insert_metrics(filepath, group_num):
     doc = DocxTemplate(f"{current_directory}/generated/{filepath}.docx")
@@ -53,7 +53,7 @@ def convert_to_pdf(filepath: str):
         os.remove(docx_file)
 
 
-def get_grouplist(group_list: [], group_num: int):
+def get_grouplist(group_list: list, group_num: int):
     filename = f"grouplist_{group_num}_{datetime.now().date().strftime('%d%m%Y')}"
     data = []
     for child in group_list:
@@ -89,7 +89,7 @@ def get_grouplist(group_list: [], group_num: int):
     return filename
 
 
-def get_qr_list(group: str, group_list: [], value: str = ""):
+def get_qr_list(group: str, group_list: list, value: str = ""):
     if value:
         extra = f"_{value}"
     else:

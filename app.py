@@ -6,6 +6,7 @@ import time
 
 import flet as ft
 import qrcode
+import xlrd
 from dotenv import load_dotenv
 from mysql.connector import connect, Error as sql_error
 from urllib.parse import urlparse, parse_qs
@@ -108,6 +109,18 @@ def main(page: ft.Page):
             #     elements.global_vars.DB_FAIL = False
             #     return None
 
+    def insert_children_info(table_filepath: str):
+
+        wb = xlrd.open_workbook(table_filepath)
+        ws = wb.sheet_by_index(0)
+        rows_num = ws.nrows
+        row = 1
+        query = "UPDATE children SET status = 'archived'"
+        if make_db_request(query, put_many=False) is not None:
+            pass
+        else:
+            print('err 1')
+
     def change_screen(target: str, params: [] = None):
         # изменение экрана
 
@@ -118,20 +131,21 @@ def main(page: ft.Page):
         page.scroll = screens[target]['scroll']
 
         if target == "login":
-            page.navigation_bar.visible = False
+            pass
+            # page.navigation_bar.visible = False
 
         elif target == "main":
-            change_navbar_tab(0)
+            page.add(main_menu_col)
 
         elif target == "showqr":
-            page.navigation_bar.visible = False
+            # page.navigation_bar.visible = False
             get_showqr(
                 target=params['target'][0],
                 value=params['value'][0]
             )
 
         elif target == "modulecheck":
-            page.navigation_bar.visible = False
+            # page.navigation_bar.visible = False
             get_modulecheck(
                 mentor_id=params['mentor_id'][0],
                 module_id=params['module_id'][0]
@@ -165,18 +179,53 @@ def main(page: ft.Page):
         title=ft.Text(size=20, weight=ft.FontWeight.W_500),
         bgcolor=ft.colors.SURFACE_VARIANT
     )
-    page.navigation_bar = ft.NavigationBar(
-        destinations=[
-            ft.NavigationDestination(icon=tabs_config[0]['icon'], label=tabs_config[0]['title']),
-            ft.NavigationDestination(icon=tabs_config[1]['icon'], label=tabs_config[1]['title']),
-            ft.NavigationDestination(icon=tabs_config[2]['icon'], label=tabs_config[2]['title']),
-            ft.NavigationDestination(icon=tabs_config[3]['icon'], label=tabs_config[3]['title']),
-        ],
-        adaptive=True,
-        on_change=change_navbar_tab
-    )
+    # page.navigation_bar = ft.NavigationBar(
+    #     destinations=[
+    #         ft.NavigationDestination(icon=tabs_config[0]['icon'], label=tabs_config[0]['title']),
+    #         ft.NavigationDestination(icon=tabs_config[1]['icon'], label=tabs_config[1]['title']),
+    #         ft.NavigationDestination(icon=tabs_config[2]['icon'], label=tabs_config[2]['title']),
+    #         ft.NavigationDestination(icon=tabs_config[3]['icon'], label=tabs_config[3]['title']),
+    #     ],
+    #     adaptive=True,
+    #     on_change=change_navbar_tab
+    # )
 
     module_traffic_col = ft.Column(width=600)
+
+    main_menu_col = ft.Column(
+        controls=[
+            ft.Card(
+                ft.Container(
+                    content=ft.ListTile(
+                        leading=ft.Icon(ft.icons.CHILD_CARE),
+                        title=ft.Text("Информация о детях", size=20, weight=ft.FontWeight.W_400)
+                    ),
+                    on_click=lambda _: print("142134"))),
+            ft.Card(
+                ft.Container(
+                    content=ft.ListTile(
+                        leading=ft.Icon(ft.icons.SCHOOL),
+                        title=ft.Text("Учебные модули", size=20, weight=ft.FontWeight.W_400)
+                    ),
+                    on_click=lambda _: print("142134"))),
+            ft.Card(
+                ft.Container(
+                    content=ft.ListTile(
+                        leading=ft.Icon(ft.icons.PEOPLE_ALT),
+                        title=ft.Text("Воспитательский состав", size=20, weight=ft.FontWeight.W_400)
+                    ),
+                    on_click=lambda _: print("142134"))),
+            ft.Card(
+                ft.Container(
+                    content=ft.ListTile(
+                        leading=ft.Icon(ft.icons.SETTINGS),
+                        title=ft.Text("Настройки", size=20, weight=ft.FontWeight.W_400)
+                    ),
+                    on_click=lambda _: print("142134"))),
+            ft.Text("CROD.CONNECT | created by lrrrtm")
+        ],
+        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+    )
 
     settings_col = ft.Column(
         controls=[
@@ -437,7 +486,7 @@ def main(page: ft.Page):
             group_title = f"Группа №{value}"
         else:
             query = f"SELECT * FROM {target} WHERE status != %s"
-            params = ('active', )
+            params = ('active',)
             group_title = f"{titles[target]}"
 
         users_list = make_db_request(query, params, get_many=True)
@@ -527,7 +576,7 @@ def main(page: ft.Page):
     if platform.system() == "Windows":
         page.window_width = 377
         page.window_height = 768
-        page.route = "/modulecheck?mentor_id=1&module_id=1"
+        # page.route = "/modulecheck?mentor_id=1&module_id=1"
         # page.route = "/showqr?target=mentors&value=-1"
 
     # Точка входа
