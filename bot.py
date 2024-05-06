@@ -911,6 +911,7 @@ async def stop_feedback():
                         f"\n\nОбратная связь по вашему модулю за {date}",
                 reply_markup=kb_hello['mentors'].as_markup()
             )
+            # print(os.listdir('wording/generated'))
             if os.path.exists(filepath):
                 os.remove(filepath)
         else:

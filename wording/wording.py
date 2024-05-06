@@ -3,7 +3,8 @@ import platform
 import shutil
 
 import docx
-import groupdocs_conversion_cloud
+# import groupdocs_conversion_cloud
+import convertapi
 from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.shared import Pt
@@ -27,34 +28,17 @@ def insert_metrics(filepath, group_num):
 
 
 def convert_to_pdf(filepath: str):
+    convertapi.api_secret = os.getenv('CONVERT_SECRET')
     docx_file = f"{current_directory}/generated/{filepath}.docx"
 
-    configuration = groupdocs_conversion_cloud.Configuration(os.getenv('GROUPDOCS_CLIENT_ID'), os.getenv('GROUPDOCS_SECRET_ID'))
-    configuration.api_base_url = "https://api.groupdocs.cloud"
-    my_storage = ""
-
-    file_api = groupdocs_conversion_cloud.FileApi.from_config(configuration)
-    request = groupdocs_conversion_cloud.UploadFileRequest(f"{filepath}.docx", docx_file, my_storage)
-    file_api.upload_file(request)
-
-    convert_api = groupdocs_conversion_cloud.ConvertApi.from_keys(os.getenv('GROUPDOCS_CLIENT_ID'), os.getenv('GROUPDOCS_SECRET_ID'))
-
-    settings = groupdocs_conversion_cloud.ConvertSettings()
-    settings.file_path = f"{filepath}.docx"
-    settings.format = "pdf"
-    settings.output_path = ""
-
-    request = groupdocs_conversion_cloud.ConvertDocumentRequest(settings)
-    convert_api.convert_document(request)
-
-    file_api = groupdocs_conversion_cloud.FileApi.from_config(configuration)
-    request = groupdocs_conversion_cloud.DownloadFileRequest(f"{filepath}.pdf", my_storage)
-    response = file_api.download_file(request)
-    print(response)
-    print(f"{current_directory}/generated")
-
-    shutil.move(response, f"{current_directory}/generated")
-    print(os.listdir(f"{current_directory}/generated"))
+    converted = convertapi.convert(
+        'pdf',
+        {
+            'File': docx_file
+        },
+        from_format='doc'
+    )
+    converted.save_files(f"{current_directory}/generated")
 
     if os.path.exists(docx_file):
         os.remove(docx_file)

@@ -7,4 +7,4 @@ APScheduler==3.10.4
 qrcode==7.4.2
 django-qrcode==0.3
 requests==2.31.0
-groupdocs_conversion_cloud==24.4
+convertapi==1.8.0
