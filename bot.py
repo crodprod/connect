@@ -188,6 +188,8 @@ async def send_hello(telegram_id: int, table: str):
             if mentor['telegram_id'] != telegram_id:
                 mntr = get_text_link(mentor['name'], f"tg://user?id={mentor['telegram_id']}")
                 other_mentors += f"{mntr}\n"
+        if not other_mentors:
+            other_mentors = "отсутствуют"
         await bot.send_message(
             chat_id=telegram_id,
             text=lexicon['hello_messages']['mentors'].format(
