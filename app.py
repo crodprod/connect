@@ -131,9 +131,9 @@ def main(page: ft.Page):
                     ft.ListTile(
                         title=ft.Text(title),
                         subtitle=ft.Text(subtitle),
-                        leading=ft.Icon(icon)
-                    ),
-                    on_click=lambda _: open_confirmation(type)
+                        leading=ft.Icon(icon),
+                        on_click=lambda _: open_confirmation(type)
+                    )
                 ),
                 width=600
             )
@@ -143,11 +143,12 @@ def main(page: ft.Page):
                     ft.ListTile(
                         title=ft.Text(title),
                         subtitle=ft.Text(subtitle),
-                        leading=ft.Icon(icon)
-                    ),
-                    on_click=lambda _: change_screen(target_screen)
+                        leading=ft.Icon(icon),
+                        on_click=lambda _: change_screen(target_screen)
+                    )
                 ),
-                width=600
+                width=600,
+                # height=100
             )
 
         return card
@@ -494,6 +495,12 @@ def main(page: ft.Page):
                         subtitle="Изменение параметров текущей смены или потока",
                         icon=ft.icons.MANAGE_ACCOUNTS,
                         type="edit_stream"
+                    ),
+                    get_menu_card(
+                        title="Перезагрузка",
+                        subtitle="Перезагрузка копонентов сервисов ЦРОДа",
+                        icon=ft.icons.RESTART_ALT,
+                        target_screen="main"
                     )
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER
