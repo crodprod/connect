@@ -42,6 +42,36 @@ screens = {
         "target": "",
         'scroll': None
     },
+    "add_module": {
+        "title": "Новый модуль",
+        "lead_icon": icons.ARROW_BACK,
+        "target": "modules",
+        'scroll': None
+    },
+    "add_mentor": {
+        "title": "Новый воспитатель",
+        "lead_icon": icons.ARROW_BACK,
+        "target": "mentors_info",
+        'scroll': None
+    },
+    "add_admin": {
+        "title": "Новый администратор",
+        "lead_icon": icons.ARROW_BACK,
+        "target": "mentors",
+        'scroll': None
+    },
+    "mentors_info": {
+        "title": "Воспитатели",
+        "lead_icon": icons.ARROW_BACK,
+        "target": "mentors",
+        'scroll': ScrollMode.HIDDEN
+    },
+    "admins_info": {
+        "title": "Администраторы",
+        "lead_icon": icons.ARROW_BACK,
+        "target": "mentors",
+        'scroll': ScrollMode.HIDDEN
+    },
     "showqr": {
         "title": "QR-коды",
         "lead_icon": None,

@@ -153,6 +153,8 @@ def main(page: ft.Page):
         # изменение экрана
 
         page.controls.clear()
+        # page.clean()
+        page.appbar.actions = None
         page.appbar.leading = None
         page.appbar.visible = True
 
@@ -171,6 +173,132 @@ def main(page: ft.Page):
 
         elif target == "main":
             page.add(main_menu_col)
+        elif target == "mentors_info":
+            page.appbar.actions = [
+                ft.Container(
+                    ft.IconButton(ft.icons.PERSON_ADD, on_click=lambda _: change_screen("add_mentor")),
+                    padding=10
+                )
+            ]
+            query = "SELECT * FROM mentors where status = 'active'"
+            users = make_db_request(query, get_many=True)
+            if users is not None:
+                col = ft.Column()
+                for user in users:
+                    popup_items = [
+                        ft.PopupMenuItem(text='Изменить группу', icon=ft.icons.EDIT),
+                        ft.PopupMenuItem(text='QR-код', icon=ft.icons.QR_CODE, on_click=lambda _: show_qr(f"mentors_{user['pass_phrase']}")),
+                        ft.PopupMenuItem(text='Удалить', icon=ft.icons.DELETE),
+                    ]
+                    if user['telegram_id'] is None:
+                    #     popup_items.insert(0, ft.PopupMenuItem(text='Активировать', icon=ft.icons.SWITCH_ACCOUNT),)
+                        bgcolor = ft.colors.AMBER
+                    else:
+                        bgcolor = None
+
+                    col.controls.append(
+                        ft.Card(
+                            ft.Container(
+                                content=ft.Row(
+                                    [
+                                        ft.Container(
+                                            ft.ListTile(
+                                                title=ft.Text(user['name']),
+                                                subtitle=ft.Text(f"Группа №{user['group_num']}")
+                                            ),
+                                            margin=ft.margin.only(left=-15),
+                                            expand=True
+                                        ),
+                                        ft.PopupMenuButton(
+                                            items=popup_items
+                                        )
+                                    ]
+                                ),
+                                padding=15
+                            ),
+                            width=600,
+                            surface_tint_color=bgcolor
+                        )
+                    )
+                page.add(col)
+        elif target == "admins_info":
+            page.appbar.actions = [
+                ft.Container(
+                    ft.IconButton(ft.icons.PERSON_ADD, on_click=lambda _: change_screen("add_admin")),
+                    padding=10
+                )
+            ]
+        elif target == "add_module":
+            col = ft.Column(
+                controls=[
+                    ft.TextField(
+                        label="Название",
+                        hint_text="Программирование на python"
+                    ),
+                    ft.Dropdown(
+                        label="Локация",
+                        options=[ft.dropdown.Option(key=str(a), text=str(a)) for a in range(1, 6)]
+                    ),
+                    ft.TextField(
+                        label="Количество мест",
+                        hint_text="15"
+                    ),
+                    ft.Container(ft.Divider(thickness=1)),
+                    ft.TextField(
+                        label="ФИО преподавателя",
+                        hint_text="Иванов Иван Иванович"
+                    ),
+                    ft.Row([ft.ElevatedButton(
+                        text="Добавить",
+                        icon=ft.icons.SAVE
+                    )], alignment=ft.MainAxisAlignment.END)
+                ],
+                width=600,
+                alignment=ft.MainAxisAlignment.START,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER
+            )
+            page.add(ft.Container(col, expand=True))
+
+        elif target == "add_mentor":
+            col = ft.Column(
+                controls=[
+                    ft.TextField(
+                        label="ФИО",
+                        hint_text="Иванов Иван Иванович"
+                    ),
+                    ft.Dropdown(
+                        label="Номер группы",
+                        options=[ft.dropdown.Option(key=str(a), text=str(a)) for a in range(1, 6)]
+                    ),
+                    ft.Row([ft.ElevatedButton(
+                        text="Добавить",
+                        icon=ft.icons.SAVE
+                    )], alignment=ft.MainAxisAlignment.END)
+                ],
+                width=600,
+                alignment=ft.MainAxisAlignment.START,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER
+            )
+            page.add(ft.Container(col, expand=True))
+
+        elif target == "add_admin":
+            col = ft.Column(
+                controls=[
+                    ft.TextField(
+                        label="ФИО",
+                        hint_text="Иванов Иван Иванович"
+                    ),
+                    ft.Row([ft.ElevatedButton(
+                        text="Добавить",
+                        icon=ft.icons.SAVE
+                    )], alignment=ft.MainAxisAlignment.END)
+                ],
+                width=600,
+                alignment=ft.MainAxisAlignment.START,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER
+            )
+            page.add(ft.Container(col, expand=True))
+
 
         elif target == "children":
             col = ft.Column(
@@ -193,7 +321,7 @@ def main(page: ft.Page):
                         title="Новый модуль",
                         subtitle="Создание нового модуля",
                         icon=ft.icons.ADD_CIRCLE,
-                        target_screen="main"
+                        target_screen="add_module"
                     ),
                     get_menu_card(
                         title="Текущие модули",
@@ -219,13 +347,13 @@ def main(page: ft.Page):
                         title="Воспитатели",
                         subtitle="Управление воспитателями",
                         icon=ft.icons.EMOJI_PEOPLE,
-                        target_screen="main"
+                        target_screen="mentors_info"
                     ),
                     get_menu_card(
                         title="Администраторы",
                         subtitle="Управление администраторами",
                         icon=ft.icons.MANAGE_ACCOUNTS,
-                        target_screen="main"
+                        target_screen="admins_info"
                     )
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER
@@ -799,7 +927,7 @@ def main(page: ft.Page):
     current_url = urlparse(page.route)
     url_params = parse_qs(current_url.query)
     if current_url.path == '/':
-        change_screen("login")
+        change_screen("mentors")
 
     elif current_url.path == '/modulecheck':
         # Отметка посещаемости
