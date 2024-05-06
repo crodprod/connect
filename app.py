@@ -13,7 +13,7 @@ from urllib.parse import urlparse, parse_qs
 
 from requests import post
 
-from flet_elements.tabs import tabs_config
+from flet_elements.tabs import menu_tabs_config
 from flet_elements.screens import screens
 
 os.environ['FLET_WEB_APP_PATH'] = '/connect'
@@ -121,11 +121,32 @@ def main(page: ft.Page):
         else:
             print('err 1')
 
+    def get_menu_card(title: str, subtitle: str, icon, target_screen: str):
+        card = ft.Card(
+            ft.Container(
+                ft.ListTile(
+                    title=ft.Text(title),
+                    subtitle=ft.Text(subtitle),
+                    leading=ft.Icon(icon)
+                ),
+                on_click=lambda _:change_screen(target_screen)
+            ),
+            width=600
+        )
+
+        return card
+
     def change_screen(target: str, params: [] = None):
         # изменение экрана
 
         page.controls.clear()
-        page.floating_action_button = None
+        page.appbar.leading = None
+
+        if screens[target]['lead_icon'] is not None:
+            page.appbar.leading = ft.IconButton(
+                icon=screens[target]['lead_icon'],
+                on_click=lambda _: change_screen(screens[target]['target'])
+            )
 
         page.appbar.title.value = screens[target]['title']
         page.scroll = screens[target]['scroll']
@@ -137,6 +158,88 @@ def main(page: ft.Page):
         elif target == "main":
             page.add(main_menu_col)
 
+        elif target == "children":
+            col = ft.Column(
+                controls=[
+                    get_menu_card(
+                        title="Обновление списка",
+                        subtitle="Загрузка таблицы с информацией о детях",
+                        icon=ft.icons.UPLOAD_FILE,
+                        target_screen="main"
+                    )
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER
+            )
+            page.add(col)
+
+        elif target == "modules":
+            col = ft.Column(
+                controls=[
+                    get_menu_card(
+                        title="Новый модуль",
+                        subtitle="Создание нового модуля",
+                        icon=ft.icons.ADD_CIRCLE,
+                        target_screen="main"
+                    ),
+                    get_menu_card(
+                        title="Текущие модули",
+                        subtitle="Просмотр активных модулей",
+                        icon=ft.icons.VIEW_MODULE,
+                        target_screen="main"
+                    ),
+                    get_menu_card(
+                        title="Архив",
+                        subtitle="Просмотр архивированных модулей",
+                        icon=ft.icons.ARCHIVE,
+                        target_screen="main"
+                    )
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER
+            )
+            page.add(col)
+
+        elif target == "mentors":
+            col = ft.Column(
+                controls=[
+                    get_menu_card(
+                        title="Воспитатели",
+                        subtitle="Управление воспитателями",
+                        icon=ft.icons.EMOJI_PEOPLE,
+                        target_screen="main"
+                    ),
+                    get_menu_card(
+                        title="Администраторы",
+                        subtitle="Управление администраторами",
+                        icon=ft.icons.MANAGE_ACCOUNTS,
+                        target_screen="main"
+                    )
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER
+            )
+            page.add(col)
+
+        elif target == "settings":
+            col = ft.Column(
+                controls=[
+                    get_menu_card(
+                        title="API-токен",
+                        subtitle="Изменение токена телеграмм-бота",
+                        icon=ft.icons.TELEGRAM,
+                        target_screen="main"
+                    ),
+                    get_menu_card(
+                        title="Параметры смены",
+                        subtitle="Изменение параметров текущей смены или потока",
+                        icon=ft.icons.MANAGE_ACCOUNTS,
+                        target_screen="main"
+                    )
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER
+            )
+            page.add(col)
+
+
+        # экраны из бота
         elif target == "showqr":
             # page.navigation_bar.visible = False
             get_showqr(
@@ -151,6 +254,8 @@ def main(page: ft.Page):
                 module_id=params['module_id'][0]
             )
 
+        page.update()
+
     def change_navbar_tab(e):
         if type(e) == int:
             tab_index = e
@@ -158,8 +263,8 @@ def main(page: ft.Page):
             tab_index = e.control.selected_index
 
         page.controls.clear()
-        page.appbar.title.value = tabs_config[tab_index]['title']
-        page.scroll = tabs_config[tab_index]['scroll']
+        page.appbar.title.value = menu_tabs_config[tab_index]['title']
+        page.scroll = menu_tabs_config[tab_index]['scroll']
 
         if tab_index == 0:
             page.add(settings_col)
@@ -176,8 +281,8 @@ def main(page: ft.Page):
 
     page.appbar = ft.AppBar(
         center_title=False,
-        title=ft.Text(size=20, weight=ft.FontWeight.W_500),
-        bgcolor=ft.colors.SURFACE_VARIANT
+        title=ft.Text(size=20, weight=ft.FontWeight.W_500)
+        # bgcolor=ft.colors.SURFACE_VARIANT
     )
     # page.navigation_bar = ft.NavigationBar(
     #     destinations=[
@@ -197,31 +302,35 @@ def main(page: ft.Page):
             ft.Card(
                 ft.Container(
                     content=ft.ListTile(
-                        leading=ft.Icon(ft.icons.CHILD_CARE),
-                        title=ft.Text("Информация о детях", size=20, weight=ft.FontWeight.W_400)
+                        leading=ft.Icon(menu_tabs_config[0]['icon']),
+                        title=ft.Text(menu_tabs_config[0]['title'], size=20, weight=ft.FontWeight.W_400)
                     ),
-                    on_click=lambda _: print("142134"))),
+                    on_click=lambda _: change_screen("children")),
+                width=600),
             ft.Card(
                 ft.Container(
                     content=ft.ListTile(
-                        leading=ft.Icon(ft.icons.SCHOOL),
-                        title=ft.Text("Учебные модули", size=20, weight=ft.FontWeight.W_400)
+                        leading=ft.Icon(menu_tabs_config[1]['icon']),
+                        title=ft.Text(menu_tabs_config[1]['title'], size=20, weight=ft.FontWeight.W_400)
                     ),
-                    on_click=lambda _: print("142134"))),
+                    on_click=lambda _: change_screen("modules")),
+                width=600),
             ft.Card(
                 ft.Container(
                     content=ft.ListTile(
-                        leading=ft.Icon(ft.icons.PEOPLE_ALT),
-                        title=ft.Text("Воспитательский состав", size=20, weight=ft.FontWeight.W_400)
+                        leading=ft.Icon(menu_tabs_config[2]['icon']),
+                        title=ft.Text(menu_tabs_config[2]['title'], size=20, weight=ft.FontWeight.W_400)
                     ),
-                    on_click=lambda _: print("142134"))),
+                    on_click=lambda _: change_screen("mentors")),
+                width=600),
             ft.Card(
                 ft.Container(
                     content=ft.ListTile(
-                        leading=ft.Icon(ft.icons.SETTINGS),
-                        title=ft.Text("Настройки", size=20, weight=ft.FontWeight.W_400)
+                        leading=ft.Icon(menu_tabs_config[3]['icon']),
+                        title=ft.Text(menu_tabs_config[3]['title'], size=20, weight=ft.FontWeight.W_400)
                     ),
-                    on_click=lambda _: print("142134"))),
+                    on_click=lambda _: change_screen("settings")),
+                width=600),
             ft.Text("CROD.CONNECT | created by lrrrtm")
         ],
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,

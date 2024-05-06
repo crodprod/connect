@@ -1,10 +1,10 @@
 from flet import icons, ScrollMode, Icon, FilledTonalButton
 
-tabs_config = {
+menu_tabs_config = {
     0: {
-        "index": "settings",
-        "title": "Главная",
-        'icon': icons.HOME,
+        "index": "children",
+        "title": "Информация о детях",
+        'icon': icons.CHILD_CARE,
         'scroll': ScrollMode.HIDDEN,
         'fab': {
             'status': True,
@@ -16,9 +16,9 @@ tabs_config = {
         ]
     },
     1: {
-        "index": "children",
-        "title": "Дети",
-        'icon': icons.CHILD_CARE,
+        "index": "modules",
+        "title": "Учебные модули",
+        'icon': icons.SCHOOL,
         'scroll': ScrollMode.ADAPTIVE,
         'fab': {
             'status': True,
@@ -28,9 +28,9 @@ tabs_config = {
         'actions': None
     },
     2: {
-        "index": "modules",
-        "title": "Модули",
-        'icon': icons.SCHOOL,
+        "index": "mentors",
+        "title": "Состав",
+        'icon': icons.PEOPLE_ALT,
         'scroll': ScrollMode.ADAPTIVE,
         'fab': {
             'status': True,
@@ -42,9 +42,9 @@ tabs_config = {
         ]
     },
     3: {
-        "index": "admins",
-        "title": "Состав",
-        'icon': icons.PEOPLE_ALT,
+        "index": "settings",
+        "title": "Настройки",
+        'icon': icons.SETTINGS,
         'scroll': ScrollMode.ADAPTIVE,
         'fab': {
             'status': True,
