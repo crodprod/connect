@@ -121,7 +121,8 @@ def main(page: ft.Page):
         if make_db_request(query, put_many=False) is not None:
             pass
         else:
-            print('err 1')
+            pass
+            # print('err 1')
 
     def get_menu_card(title: str, subtitle: str, icon, target_screen: str = "", type: str = ""):
         if type != "":
@@ -169,13 +170,33 @@ def main(page: ft.Page):
         else:
             open_sb("Ошибка БД", ft.colors.RED)
 
-    def archive_mentor(e: ft.ControlEvent):
-        print(e.control.data)
+    def add_new_admin():
+        query = "INSERT INTO admins (name, pass_phrase, status, password) VALUES (%s, %s, 'active', %s)"
+        name = new_admin_name_field.value.strip()
+        pass_phrase = create_passphrase(name)
+        password = os.urandom(3).hex()
+        response = make_db_request(query, (name, pass_phrase, password, ), put_many=False)
+        if response is not None:
+            change_screen("admins_info")
+            open_sb("Администратор добавлен", ft.colors.GREEN)
+        else:
+            open_sb("Ошибка БД", ft.colors.RED)
+
+    def remove_mentor(e: ft.ControlEvent):
         query = "UPDATE mentors SET status = 'removed' WHERE pass_phrase = %s"
         response = make_db_request(query, (e.control.data,), put_many=False)
         if response is not None:
             open_sb("Воспитатель удалён")
             change_screen("mentors_info")
+        else:
+            open_sb("Ошибка БД", ft.colors.RED)
+
+    def remove_admin(e: ft.ControlEvent):
+        query = "UPDATE admins SET status = 'removed' WHERE pass_phrase = %s"
+        response = make_db_request(query, (e.control.data,), put_many=False)
+        if response is not None:
+            open_sb("Администратор удалён")
+            change_screen("admins_info")
         else:
             open_sb("Ошибка БД", ft.colors.RED)
 
@@ -202,6 +223,11 @@ def main(page: ft.Page):
                 btn_add_mentor.disabled = False
             else:
                 btn_add_mentor.disabled = True
+        elif target == "admin":
+            if len(new_admin_name_field.value.strip().split(" ")) in [2, 3]:
+                btn_add_admin.disabled = False
+            else:
+                btn_add_admin.disabled = True
 
         page.update()
 
@@ -244,8 +270,8 @@ def main(page: ft.Page):
                 for user in users:
                     popup_items = [
                         ft.FilledButton(text='Изменить группу', icon=ft.icons.EDIT, on_click=goto_change_mentor_group, data=user['pass_phrase']),
-                        ft.PopupMenuItem(text='QR-код', icon=ft.icons.QR_CODE, on_click=lambda _: show_qr(f"mentors_{user['pass_phrase']}")),
-                        ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=user['pass_phrase'], on_click=archive_mentor),
+                        ft.FilledButton(text='QR-код', icon=ft.icons.QR_CODE, on_click=show_qr, data=f"mentors_{user['pass_phrase']}"),
+                        ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=user['pass_phrase'], on_click=remove_mentor),
                     ]
                     if user['telegram_id'] is None:
                         #     popup_items.insert(0, ft.PopupMenuItem(text='Активировать', icon=ft.icons.SWITCH_ACCOUNT),)
@@ -287,6 +313,50 @@ def main(page: ft.Page):
                     padding=10
                 )
             ]
+            query = "SELECT * FROM admins WHERE status = 'active'"
+            users = make_db_request(query, get_many=True)
+            if users is not None:
+                col = ft.Column()
+                for user in users:
+                    if user['password'] == password_field.value:
+                        popup_items = None
+                    else:
+                        popup_items = [
+                            ft.FilledButton(text='QR-код', icon=ft.icons.QR_CODE, on_click=show_qr, data=f"admins_{user['pass_phrase']}"),
+                            ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=user['pass_phrase'], on_click=remove_admin),
+                        ]
+                    if user['telegram_id'] is None:
+                        # popup_items.insert(0, ft.PopupMenuItem(text='Активировать', icon=ft.icons.SWITCH_ACCOUNT),)
+                        bgcolor = ft.colors.AMBER
+                    else:
+                        # popup_items.insert(0, ft.PopupMenuItem(text='Отключить', icon=ft.icons.SWITCH_ACCOUNT), )
+                        bgcolor = None
+
+                    col.controls.append(
+                        ft.Card(
+                            ft.Container(
+                                content=ft.Row(
+                                    [
+                                        ft.Container(
+                                            ft.ListTile(
+                                                title=ft.Text(user['name']),
+                                                # subtitle=ft.Text(f"Группа №{user['group_num']}")
+                                            ),
+                                            margin=ft.margin.only(left=-15),
+                                            expand=True
+                                        ),
+                                        ft.PopupMenuButton(
+                                            items=popup_items
+                                        )
+                                    ]
+                                ),
+                                padding=15
+                            ),
+                            width=600,
+                            surface_tint_color=bgcolor
+                        )
+                    )
+                page.add(col)
             close_dialog(dialog_loading)
         elif target == "add_module":
             col = ft.Column(
@@ -338,14 +408,8 @@ def main(page: ft.Page):
         elif target == "add_admin":
             col = ft.Column(
                 controls=[
-                    ft.TextField(
-                        label="ФИО",
-                        hint_text="Иванов Иван Иванович"
-                    ),
-                    ft.Row([ft.ElevatedButton(
-                        text="Добавить",
-                        icon=ft.icons.SAVE
-                    )], alignment=ft.MainAxisAlignment.END)
+                    new_admin_name_field,
+                    ft.Row([btn_add_admin], alignment=ft.MainAxisAlignment.END)
                 ],
                 width=600,
                 alignment=ft.MainAxisAlignment.START,
@@ -470,12 +534,24 @@ def main(page: ft.Page):
         on_click=lambda _: add_new_mentor()
     )
 
+    new_admin_name_field = ft.TextField(
+        label="ФИО",
+        hint_text="Иванов Иван Иванович",
+        on_change=lambda _: validate('admin')
+    )
+    btn_add_admin = ft.ElevatedButton(
+        text="Добавить",
+        icon=ft.icons.SAVE,
+        disabled=True,
+        on_click=lambda _: add_new_admin()
+    )
+
     def check_confirmation():
         user_code = confirmation_code_field.value
         close_dialog(dialog_confirmation)
         if dialog_confirmation.data[0] == user_code:
             open_sb("Действие подтверждено", ft.colors.GREEN)
-            print(f"confirmed_{dialog_confirmation.data[1]}")
+            # print(f"confirmed_{dialog_confirmation.data[1]}")
             # change_screen(f"confirmed_{dialog_confirmation.data[1]}")
         else:
             open_sb("Неверный код", ft.colors.RED)
@@ -531,7 +607,7 @@ def main(page: ft.Page):
                     ]
                 )
             ],
-            height=250
+            height=270
         )
     )
 
@@ -566,10 +642,13 @@ def main(page: ft.Page):
         admin_info = make_db_request(query, (password_field.value,), get_many=True)
         if admin_info is not None:
             if admin_info:
-                name = " ".join(admin_info[0]['name'].split(" ")[1:])
-                password_field.data = admin_info[0]
-                open_sb(f"Здравствуйте, {name}")
-                change_screen("main")
+                if admin_info[0]['status'] == 'active':
+                    name = " ".join(admin_info[0]['name'].split(" ")[1:])
+                    password_field.data = admin_info[0]
+                    open_sb(f"Здравствуйте, {name}")
+                    change_screen("main")
+                else:
+                    open_sb("Аккаунт отключен", ft.colors.RED)
             else:
                 open_sb("Неверный код доступа", ft.colors.RED)
         page.update()
@@ -915,8 +994,11 @@ def main(page: ft.Page):
         close_dialog(dialog_qr)
         open_sb("Ссылка скопирована")
 
-    def show_qr(phrase: str):
+    def show_qr(phrase):
         # показ диалога с qr-кодом
+
+        if type(phrase) != str:
+            phrase = phrase.control.data
 
         qr_path = f"assets/qrc/{phrase}.png"
         link = f"https://t.me/crod_connect_bot?start={phrase}"
@@ -1041,7 +1123,7 @@ def main(page: ft.Page):
     url_params = parse_qs(current_url.query)
     if current_url.path == '/':
         if platform.system() == "Windows":
-            change_screen("mentors_info")
+            change_screen("login")
         else:
             change_screen("login")
 
