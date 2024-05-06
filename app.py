@@ -2,6 +2,7 @@ import logging
 import math
 import os
 import platform
+import re
 import time
 
 import flet as ft
@@ -12,6 +13,7 @@ from mysql.connector import connect, Error as sql_error
 from urllib.parse import urlparse, parse_qs
 
 from requests import post
+from transliterate import translit
 
 from flet_elements.tabs import menu_tabs_config
 from flet_elements.screens import screens
@@ -115,7 +117,7 @@ def main(page: ft.Page):
         ws = wb.sheet_by_index(0)
         rows_num = ws.nrows
         row = 1
-        query = "UPDATE children SET status = 'archived'"
+        query = "UPDATE children SET status = 'removed'"
         if make_db_request(query, put_many=False) is not None:
             pass
         else:
@@ -149,6 +151,60 @@ def main(page: ft.Page):
 
         return card
 
+    def create_passphrase(name):
+        name = re.sub(r'[^a-zA-Zа-яА-ЯёЁ]', '', translit(''.join(name.split()[:2]), language_code='ru', reversed=True))
+        phrase = f"{name}{os.urandom(3).hex()}"
+        print(phrase)
+
+        return phrase
+
+    def add_new_mentor():
+        query = "INSERT INTO mentors (name, group_num, pass_phrase, status) VALUES (%s, %s, %s, 'active')"
+        name = new_mentor_name_field.value.strip()
+        pass_phrase = create_passphrase(name)
+        response = make_db_request(query, (name, new_mentor_group_dd.value, pass_phrase), put_many=False)
+        if response is not None:
+            change_screen("mentors_info")
+            open_sb("Воспитатель добавлен", ft.colors.GREEN)
+        else:
+            open_sb("Ошибка БД", ft.colors.RED)
+
+    def archive_mentor(e: ft.ControlEvent):
+        print(e.control.data)
+        query = "UPDATE mentors SET status = 'removed' WHERE pass_phrase = %s"
+        response = make_db_request(query, (e.control.data,), put_many=False)
+        if response is not None:
+            open_sb("Воспитатель удалён")
+            change_screen("mentors_info")
+        else:
+            open_sb("Ошибка БД", ft.colors.RED)
+
+    def goto_change_mentor_group(e: ft.ControlEvent):
+        dialog_edit_mentor_group.data = e.control.data
+        open_dialog(dialog_edit_mentor_group)
+
+    def change_mentor_group(new_group):
+        close_dialog(dialog_edit_mentor_group)
+        open_dialog(dialog_loading)
+        query = "UPDATE mentors SET group_num = %s WHERE pass_phrase = %s"
+        response = make_db_request(query, (new_group, dialog_edit_mentor_group.data,), put_many=False)
+        close_dialog(dialog_loading)
+        if response is not None:
+            change_screen('mentors_info')
+            open_sb("Группа изменена", ft.colors.GREEN)
+        else:
+            open_sb("Ошибка БД", ft.colors.RED)
+
+    def validate(target: str):
+        if target == "mentor":
+            # print(len(new_mentor_name_field.value.strip().split(" ")), new_mentor_group_dd.value)
+            if len(new_mentor_name_field.value.strip().split(" ")) in [2, 3] and new_mentor_group_dd.value is not None:
+                btn_add_mentor.disabled = False
+            else:
+                btn_add_mentor.disabled = True
+
+        page.update()
+
     def change_screen(target: str, params: [] = None):
         # изменение экрана
 
@@ -174,6 +230,7 @@ def main(page: ft.Page):
         elif target == "main":
             page.add(main_menu_col)
         elif target == "mentors_info":
+            open_dialog(dialog_loading)
             page.appbar.actions = [
                 ft.Container(
                     ft.IconButton(ft.icons.PERSON_ADD, on_click=lambda _: change_screen("add_mentor")),
@@ -186,12 +243,12 @@ def main(page: ft.Page):
                 col = ft.Column()
                 for user in users:
                     popup_items = [
-                        ft.PopupMenuItem(text='Изменить группу', icon=ft.icons.EDIT),
+                        ft.FilledButton(text='Изменить группу', icon=ft.icons.EDIT, on_click=goto_change_mentor_group, data=user['pass_phrase']),
                         ft.PopupMenuItem(text='QR-код', icon=ft.icons.QR_CODE, on_click=lambda _: show_qr(f"mentors_{user['pass_phrase']}")),
-                        ft.PopupMenuItem(text='Удалить', icon=ft.icons.DELETE),
+                        ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=user['pass_phrase'], on_click=archive_mentor),
                     ]
                     if user['telegram_id'] is None:
-                    #     popup_items.insert(0, ft.PopupMenuItem(text='Активировать', icon=ft.icons.SWITCH_ACCOUNT),)
+                        #     popup_items.insert(0, ft.PopupMenuItem(text='Активировать', icon=ft.icons.SWITCH_ACCOUNT),)
                         bgcolor = ft.colors.AMBER
                     else:
                         bgcolor = None
@@ -221,13 +278,16 @@ def main(page: ft.Page):
                         )
                     )
                 page.add(col)
+                close_dialog(dialog_loading)
         elif target == "admins_info":
+            open_dialog(dialog_loading)
             page.appbar.actions = [
                 ft.Container(
                     ft.IconButton(ft.icons.PERSON_ADD, on_click=lambda _: change_screen("add_admin")),
                     padding=10
                 )
             ]
+            close_dialog(dialog_loading)
         elif target == "add_module":
             col = ft.Column(
                 controls=[
@@ -260,20 +320,14 @@ def main(page: ft.Page):
             page.add(ft.Container(col, expand=True))
 
         elif target == "add_mentor":
+            new_mentor_name_field.value = None
+            new_mentor_group_dd.value = None
+            btn_add_mentor.disabled = True
             col = ft.Column(
                 controls=[
-                    ft.TextField(
-                        label="ФИО",
-                        hint_text="Иванов Иван Иванович"
-                    ),
-                    ft.Dropdown(
-                        label="Номер группы",
-                        options=[ft.dropdown.Option(key=str(a), text=str(a)) for a in range(1, 6)]
-                    ),
-                    ft.Row([ft.ElevatedButton(
-                        text="Добавить",
-                        icon=ft.icons.SAVE
-                    )], alignment=ft.MainAxisAlignment.END)
+                    new_mentor_name_field,
+                    new_mentor_group_dd,
+                    ft.Row([btn_add_mentor], alignment=ft.MainAxisAlignment.END)
                 ],
                 width=600,
                 alignment=ft.MainAxisAlignment.START,
@@ -399,6 +453,23 @@ def main(page: ft.Page):
 
         page.update()
 
+    new_mentor_name_field = ft.TextField(
+        label="ФИО",
+        hint_text="Иванов Иван Иванович",
+        on_change=lambda _: validate('mentor')
+    )
+    new_mentor_group_dd = ft.Dropdown(
+        label="Номер группы",
+        options=[ft.dropdown.Option(key=str(a), text=str(a)) for a in range(1, 6)],
+        on_change=lambda _: validate('mentor')
+    )
+    btn_add_mentor = ft.ElevatedButton(
+        text="Добавить",
+        icon=ft.icons.SAVE,
+        disabled=True,
+        on_click=lambda _: add_new_mentor()
+    )
+
     def check_confirmation():
         user_code = confirmation_code_field.value
         close_dialog(dialog_confirmation)
@@ -438,6 +509,31 @@ def main(page: ft.Page):
         # dialog_confirmation.content.controls[0].value = actions_descrition[action]['hint_text']
 
     confirmation_code_field = ft.TextField(hint_text="Защитный код")
+
+    dialog_edit_mentor_group = ft.AlertDialog(
+        modal=True,
+        title=ft.Row(
+            [
+                ft.Container(ft.Text("Изменение группы", size=20, weight=ft.FontWeight.W_400), expand=True),
+                ft.IconButton(ft.icons.CLOSE_ROUNDED, on_click=lambda _: close_dialog(dialog_edit_mentor_group))
+            ]
+        ),
+        content=ft.Column(
+            [
+                ft.Text("Выберите новую группу", size=18, weight=ft.FontWeight.W_200),
+                ft.Column(
+                    controls=[
+                        ft.ElevatedButton(text="1", width=300, on_click=lambda _: change_mentor_group(1)),
+                        ft.ElevatedButton(text="2", width=300, on_click=lambda _: change_mentor_group(2)),
+                        ft.ElevatedButton(text="3", width=300, on_click=lambda _: change_mentor_group(3)),
+                        ft.ElevatedButton(text="4", width=300, on_click=lambda _: change_mentor_group(4)),
+                        ft.ElevatedButton(text="5", width=300, on_click=lambda _: change_mentor_group(5))
+                    ]
+                )
+            ],
+            height=250
+        )
+    )
 
     dialog_confirmation = ft.AlertDialog(
         modal=True,
@@ -718,6 +814,23 @@ def main(page: ft.Page):
         ]
     )
 
+    loading_text = ft.Text("Загрузка", size=20, weight=ft.FontWeight.W_400)
+    dialog_loading = ft.AlertDialog(
+        # Диалог с кольцом загрузки
+
+        # title=ft.Text(size=20),
+        modal=True,
+        content=ft.Column(
+            controls=[
+                ft.Column([loading_text, ft.ProgressBar()], alignment=ft.MainAxisAlignment.CENTER),
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            width=600,
+            height=50
+        )
+    )
+
     # Функции
     def open_dialog(dialog: ft.AlertDialog):
         page.dialog = dialog
@@ -810,7 +923,7 @@ def main(page: ft.Page):
         qr_img = qrcode.make(data=link)
         qr_img.save(qr_path)
 
-        dialog_qr.content = ft.Image(src=f"qrc/{phrase}.png", border_radius=ft.border_radius.all(10))
+        dialog_qr.content = ft.Image(src=f"qrc/{phrase}.png", border_radius=ft.border_radius.all(10), width=300)
 
         dialog_qr.actions[0].on_click = lambda _: copy_qr_link(link)
         page.dialog = dialog_qr
@@ -927,7 +1040,7 @@ def main(page: ft.Page):
     current_url = urlparse(page.route)
     url_params = parse_qs(current_url.query)
     if current_url.path == '/':
-        change_screen("login")
+        change_screen("mentors_info")
 
     elif current_url.path == '/modulecheck':
         # Отметка посещаемости
