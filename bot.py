@@ -150,13 +150,13 @@ async def get_module_list(callback: types.CallbackQuery):
 
 
 async def send_hello(telegram_id: int, table: str):
-    query = f"SELECT * FROM {table} WHERE telegram_id = %s"
+    query = f"SELECT * FROM {table} WHERE telegram_id = %s and status = 'active'"
     db.connect()
     user_info = db.execute_query(query, (telegram_id,))
     if table == 'children':
         member_info = await bot.get_chat_member(chat_id=f"@{os.getenv('ID_CHANNEL')}", user_id=telegram_id)
         if type(member_info) != types.chat_member_left.ChatMemberLeft:
-            query = f"SELECT * FROM mentors WHERE group_num = %s"
+            query = f"SELECT * FROM mentors WHERE group_num = %s and status = 'active'"
             mentors_info = db.execute_query(query, (user_info['group_num'],), many=True)
             mentors = ""
             for mentor in mentors_info:
@@ -182,7 +182,7 @@ async def send_hello(telegram_id: int, table: str):
         query = "SELECT COUNT(*) as count FROM children WHERE group_num = %s"
         children_count = db.execute_query(query, (user_info['group_num'],))['count']
         other_mentors = ""
-        query = "SELECT * FROM mentors WHERE group_num = %s"
+        query = "SELECT * FROM mentors WHERE group_num = %s and status = 'active'"
         mentors_info = db.execute_query(query, (user_info['group_num'],), many=True)
         for mentor in mentors_info:
             if mentor['telegram_id'] != telegram_id:
@@ -435,10 +435,10 @@ async def send_random_value(callback: types.CallbackQuery):
 async def callbacks_mentors(callback: types.CallbackQuery, callback_data: MentorsCallbackFactory):
     action = callback_data.action
     user_info = await get_user_info(callback.from_user.id, 'mentors')
-    if user_info['status'] == 'active':
+    if user_info is not None and user_info['status'] == 'active':
         if action == "grouplist":
             await callback.message.delete()
-            query = "SELECT * FROM children where group_num = %s"
+            query = "SELECT * FROM children where group_num = %s and status = 'active'"
             db.connect()
             group_list = db.execute_query(query, (user_info['group_num'],), many=True)
             db.disconnect()
@@ -578,7 +578,7 @@ async def callnacks_select_module(callback: types.CallbackQuery, callback_data: 
 async def callbacks_teachers(callback: types.CallbackQuery, callback_data: TeachersCallbackFactory):
     action = callback_data.action
     user_info = await get_user_info(callback.from_user.id, 'teachers')
-    if user_info['status'] == 'active':
+    if user_info is not None and user_info['status'] == 'active':
         query = "SELECT * FROM modules WHERE id = %s"
         db.connect()
         module_info = db.execute_query(query, (user_info['module_id'],))
@@ -698,7 +698,7 @@ async def callbacks_radio(callback: types.CallbackQuery, callback_data: RadioReq
 async def callbacks_admins(callback: types.CallbackQuery, callback_data: AdminsCallbackFactory, state: FSMContext):
     action = callback_data.action
     user_info = await get_user_info(callback.from_user.id, 'admins')
-    if user_info['status'] == 'active':
+    if user_info is not None and user_info['status'] == 'active':
         if action == "modules_list":
             await get_module_list(callback)
 
@@ -826,7 +826,7 @@ async def create_feedback_proccess(user_info: [], callback: types.CallbackQuery,
 async def callbacks_children(callback: types.CallbackQuery, callback_data: ChildrenCallbackFactory, state: FSMContext):
     action = callback_data.action
     user_info = await get_user_info(callback.from_user.id, 'children')
-    if user_info['status'] == 'active':
+    if user_info is not None and user_info['status'] == 'active':
         if action == "modules":
             await recording_to_module_process(user_info['id'], callback)
 
