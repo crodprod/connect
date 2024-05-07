@@ -29,6 +29,13 @@ screens = {
         'scroll': ScrollMode.HIDDEN
 
     },
+    "docs": {
+        "title": "Документы",
+        "lead_icon": icons.ARROW_BACK,
+        "target": "main",
+        'scroll': ScrollMode.HIDDEN
+
+    },
     "settings": {
         "title": "Настройки",
         "lead_icon": icons.ARROW_BACK,

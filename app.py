@@ -2,7 +2,9 @@ import logging
 import math
 import os
 import platform
+import random
 import re
+import shutil
 import subprocess
 import time
 
@@ -12,10 +14,12 @@ import xlrd
 from dotenv import load_dotenv
 from mysql.connector import connect, Error as sql_error
 from urllib.parse import urlparse, parse_qs
+from pypdf import PdfMerger
 
 from requests import post
 from transliterate import translit
 
+import wording.wording
 from flet_elements.tabs import menu_tabs_config
 from flet_elements.screens import screens
 
@@ -26,6 +30,19 @@ load_dotenv()
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s")
+
+
+def remove_folder_content(filepath):
+    for filename in os.listdir(filepath):
+        file_path = os.path.join(filepath, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            pass
+    print('removed successfully')
 
 
 def create_db_connection():
@@ -94,9 +111,17 @@ def main(page: ft.Page):
         data = {'chat_id': tID, 'text': message_text, "parse_mode": "Markdown"}
         post(url=url, data=data)
 
+    def send_telegram_document(tID, filepath: str, description: str):
+        url = f'https://api.telegram.org/bot{os.getenv("BOT_TOKEN")}/sendDocument'
+
+        with open(filepath, 'rb') as file:
+            files = {'document': file}
+            data = {'chat_id': tID, 'caption': description, 'parse_mode': "Markdown"}
+            post(url=url, data=data, files=files)
+
     def make_db_request(sql_query: str, params: tuple = (), get_many: bool = None, put_many: bool = None):
         # обработка sql-запросов
-        # to-do - сообщение об ошибке
+
         connection, cur = create_db_connection()
         if connection is not None:
             logging.info(f"DATABASE REQUEST: query: {sql_query}, params: {params}")
@@ -117,33 +142,44 @@ def main(page: ft.Page):
                 connection.commit()
                 return data
             except Exception as e:
+                logging.error(f'REQUEST ERROR: {e}')
                 return None
-                # elements.global_vars.DB_FAIL = True
-                # logging.error(f"DATABASE REQUEST: {e}\n{sql_query}{params}")
-                # if page.navigation_bar.selected_index != 3:
-                #     page.floating_action_button = None
-                #     show_error('db_request', labels['errors']['db_request'].format(elements.global_vars.ERROR_TEXT.split(":")[0]))
-                #     elements.global_vars.DB_FAIL = False
-                # return None
         else:
+            logging.error(f'CONNECTION ERROR')
             return None
-            # if page.navigation_bar.selected_index != 3:
-            #     page.floating_action_button = None
-            #     show_error('db_request', labels['errors']['db_request'].format(elements.global_vars.ERROR_TEXT.split(":")[0]))
-            #     elements.global_vars.DB_FAIL = False
-            #     return None
 
     def insert_children_info(table_filepath: str):
-
+        loading_text.value = "Загрузка"
+        open_dialog(dialog_loading)
         wb = xlrd.open_workbook(table_filepath)
         ws = wb.sheet_by_index(0)
         rows_num = ws.nrows
         row = 1
         query = "UPDATE children SET status = 'removed'"
         if make_db_request(query, put_many=False) is not None:
-            pass
+            while row < rows_num:
+                dialog_loading.content.controls[0].controls[0].value = f"Загрузка {row}/{rows_num}"
+                page.update()
+                child = []
+                for col in range(5):
+                    child.append(ws.cell_value(row, col))
+                pass_phrase = create_passphrase(child[0])
+                birth = xlrd.xldate.xldate_as_tuple(child[1], 0)
+                print(birth)
+                birth = f"{birth[0]}-{birth[1]}-{birth[2]}"
+                query = "INSERT INTO children (name, group_num, birth, comment, parrent_name, parrent_phone, pass_phrase) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+                response = make_db_request(query, (child[0], random.randint(1, 5), birth, child[2], child[3], child[4], pass_phrase,), put_many=False)
+                if response is None:
+                    close_dialog(dialog_loading)
+                    open_sb("Ошибка БД", ft.colors.RED)
+                    return
+                row += 1
+            close_dialog(dialog_loading)
+            change_screen("children")
+            open_sb("Данные загружены!", ft.colors.GREEN)
+
         else:
-            pass
+            open_sb("Ошибка БД", ft.colors.RED)
             # print('err 1')
 
     def make_reboot(target: str):
@@ -280,6 +316,7 @@ def main(page: ft.Page):
 
     def change_mentor_group(new_group):
         close_dialog(dialog_edit_mentor_group)
+        loading_text.value = "Обновляем"
         open_dialog(dialog_loading)
         query = "UPDATE mentors SET group_num = %s WHERE pass_phrase = %s"
         response = make_db_request(query, (new_group, dialog_edit_mentor_group.data,), put_many=False)
@@ -314,14 +351,15 @@ def main(page: ft.Page):
         page.appbar.leading = None
         page.appbar.visible = True
 
-        if screens[target]['lead_icon'] is not None:
-            page.appbar.leading = ft.IconButton(
-                icon=screens[target]['lead_icon'],
-                on_click=lambda _: change_screen(screens[target]['target'])
-            )
+        if "createdocs" not in target:
+            if screens[target]['lead_icon'] is not None:
+                page.appbar.leading = ft.IconButton(
+                    icon=screens[target]['lead_icon'],
+                    on_click=lambda _: change_screen(screens[target]['target'])
+                )
 
-        page.appbar.title.value = screens[target]['title']
-        page.scroll = screens[target]['scroll']
+            page.appbar.title.value = screens[target]['title']
+            page.scroll = screens[target]['scroll']
 
         if target == "login":
             page.appbar.visible = False
@@ -330,6 +368,7 @@ def main(page: ft.Page):
         elif target == "main":
             page.add(main_menu_col)
         elif target == "mentors_info":
+            loading_text.value = "Загрузка"
             open_dialog(dialog_loading)
             page.appbar.actions = [
                 ft.Container(
@@ -378,6 +417,7 @@ def main(page: ft.Page):
                 page.add(col)
                 close_dialog(dialog_loading)
         elif target == "admins_info":
+            loading_text.value = "Загрузка"
             open_dialog(dialog_loading)
             page.appbar.actions = [
                 ft.Container(
@@ -501,6 +541,38 @@ def main(page: ft.Page):
             )
             page.add(col)
 
+        elif target == "docs":
+            col = ft.Column(
+                controls=[
+                    get_menu_card(
+                        title="Списки групп",
+                        subtitle="Таблицы с особенностями детей и контактами родителей",
+                        icon=ft.icons.VIEW_LIST,
+                        target_screen="createdocs_groups"
+                    ),
+                    get_menu_card(
+                        title="QR-коды",
+                        subtitle="Таблицы с QR-кодами для групп, воспитателей и преподавателей",
+                        icon=ft.icons.QR_CODE_2,
+                        target_screen="createdocs_qr"
+                    ),
+                    get_menu_card(
+                        title="Списки модулей",
+                        subtitle="Распределение детей по учебным модулям",
+                        icon=ft.icons.GROUPS,
+                        target_screen="createdocs_modules"
+                    ),
+                    get_menu_card(
+                        title="Навигация",
+                        subtitle="Распределение модулей по аудиториям",
+                        icon=ft.icons.LOCATION_ON,
+                        target_screen="createdocs_navigation"
+                    )
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER
+            )
+            page.add(col)
+
         elif target == "modules":
             col = ft.Column(
                 controls=[
@@ -551,13 +623,6 @@ def main(page: ft.Page):
             col = ft.Column(
                 controls=[
                     get_menu_card(
-                        title="API-токен",
-                        subtitle="Изменение токена телеграмм-бота",
-                        icon=ft.icons.TELEGRAM,
-                        # target_screen="main"
-                        type="edit_botapi"
-                    ),
-                    get_menu_card(
                         title="Параметры смены",
                         subtitle="Изменение параметров текущей смены или потока",
                         icon=ft.icons.MANAGE_ACCOUNTS,
@@ -568,12 +633,26 @@ def main(page: ft.Page):
                         subtitle="Перезагрузка сервисов ЦРОДа",
                         icon=ft.icons.RESTART_ALT,
                         target_screen="reboot"
+                    ),
+                    get_menu_card(
+                        title="О приложении",
+                        subtitle="Техническая информация",
+                        icon=ft.icons.INFO,
+                        target_screen="main"
                     )
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER
             )
             page.add(col)
         elif target == "reboot":
+            loading_text.value = "Обновляем"
+            open_dialog(dialog_loading)
+            page.appbar.actions = [
+                ft.Container(
+                    ft.IconButton(ft.icons.RESTART_ALT, on_click=lambda _: change_screen("reboot")),
+                    padding=10
+                )
+            ]
             col = ft.Column(
                 [
                     get_reboot_card(
@@ -599,6 +678,108 @@ def main(page: ft.Page):
                 ]
             )
             page.add(col)
+            close_dialog(dialog_loading)
+
+        elif "createdocs" in target:
+            loading_text.value = "Генерируем документ"
+            open_dialog(dialog_loading)
+            doctype = target.split("_")[1]
+            pdf_filepaths = []
+
+            query = "SELECT telegram_id from admins WHERE password = %s"
+            response = make_db_request(query, (password_field.value,), get_many=False)
+            if response['telegram_id'] is None:
+                open_sb("Вы не зарегистрированы в боте", ft.colors.RED)
+            else:
+                caption = "*Генерация документов*\n\n"
+                if doctype == "groups":
+                    merger = PdfMerger()
+                    for group_num in range(1, 6):
+                        query = "SELECT * FROM children WHERE group_num = %s AND status = 'active'"
+                        group_list = make_db_request(query, (group_num,), get_many=True)
+                        if group_list is not None:
+                            if group_list:
+                                group_list_filename = wording.wording.get_grouplist(group_list, group_num)
+                                filepath = f"{current_directory}/wording/generated/{group_list_filename}.pdf"
+                                merger.append(filepath)
+                                pdf_filepaths.append(group_list_filename)
+                        else:
+                            open_sb("Ошибка БД", ft.colors.RED)
+                            break
+                    merged_filepath = f"{current_directory}/wording/generated/grouplist.pdf"
+                    merger.write(merged_filepath)
+                    merger.close()
+                    caption += "Список групп (содержит только те группы, в которых есть хотя бы 1 ребёнок)"
+                    send_telegram_document(
+                        tID=response['telegram_id'],
+                        filepath=merged_filepath,
+                        description=caption
+                    )
+                    open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
+                    remove_folder_content(f"{current_directory}/wording/generated")
+                    if os.path.exists(merged_filepath):
+                        os.remove(merged_filepath)
+                    for pdf in pdf_filepaths:
+                        if os.path.exists(pdf):
+                            os.remove(pdf)
+
+                elif doctype == "qr":
+                    merger = PdfMerger()
+
+                    # для групп детей
+                    for group_num in range(1, 6):
+                        query = "SELECT * FROM children WHERE group_num = %s AND status = 'active'"
+                        group_list = make_db_request(query, (group_num,), get_many=True)
+                        print(group_list)
+                        if group_list is not None:
+                            if group_list:
+                                qr_list_groups_filename = wording.wording.get_qr_list("children", group_list, str(group_num))
+                                filepath = f"{current_directory}/wording/generated/{qr_list_groups_filename}.pdf"
+                                merger.append(filepath)
+                                pdf_filepaths.append(qr_list_groups_filename)
+                        else:
+                            open_sb("Ошибка БД", ft.colors.RED)
+                            break
+                    # для остальных
+                    for s in ['mentors', 'teachers']:
+                        query = f"SELECT * FROM {s} WHERE status = 'active'"
+                        group_list = make_db_request(query, get_many=True)
+                        print(group_list)
+                        if group_list is not None:
+                            if group_list:
+                                qr_list_groups_filename = wording.wording.get_qr_list(s, group_list)
+                                filepath = f"{current_directory}/wording/generated/{qr_list_groups_filename}.pdf"
+                                merger.append(filepath)
+                                pdf_filepaths.append(qr_list_groups_filename)
+                        else:
+                            open_sb("Ошибка БД", ft.colors.RED)
+                            break
+
+                    merged_filepath = f"{current_directory}/wording/generated/qrlist.pdf"
+                    merger.write(merged_filepath)
+                    merger.close()
+                    caption += "Таблица QR-кодов (содержит только те группы, в которых есть хотя бы 1 пользователь)"
+                    send_telegram_document(
+                        tID=response['telegram_id'],
+                        filepath=merged_filepath,
+                        description=caption
+                    )
+                    remove_folder_content(f"{current_directory}/wording/qr")
+                    remove_folder_content(f"{current_directory}/wording/generated")
+                    open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
+                    if os.path.exists(merged_filepath):
+                        os.remove(merged_filepath)
+                    for pdf in pdf_filepaths:
+                        if os.path.exists(pdf):
+                            os.remove(pdf)
+
+
+                elif doctype == "modules":
+                    pass
+                elif doctype == "navigation":
+                    pass
+            close_dialog(dialog_loading)
+            change_screen("docs")
 
         # экраны из бота
         elif target == "showqr":
@@ -651,6 +832,9 @@ def main(page: ft.Page):
         close_dialog(dialog_confirmation)
         if dialog_confirmation.data[0] == user_code:
             open_sb("Действие подтверждено", ft.colors.GREEN)
+            action = dialog_confirmation.data[1]
+            if action == "upload_children":
+                insert_children_info(r"C:\Users\Lario\OneDrive\Рабочий стол\children.xlsx")
             # print(f"confirmed_{dialog_confirmation.data[1]}")
             # change_screen(f"confirmed_{dialog_confirmation.data[1]}")
         else:
@@ -769,7 +953,7 @@ def main(page: ft.Page):
                 ft.Container(
                     content=ft.ListTile(
                         leading=ft.Icon(menu_tabs_config[0]['icon']),
-                        title=ft.Text(menu_tabs_config[0]['title'], size=20, weight=ft.FontWeight.W_200)
+                        title=ft.Text(menu_tabs_config[0]['title'], size=18)
                     ),
                     on_click=lambda _: change_screen("children")),
                 width=600),
@@ -777,7 +961,7 @@ def main(page: ft.Page):
                 ft.Container(
                     content=ft.ListTile(
                         leading=ft.Icon(menu_tabs_config[1]['icon']),
-                        title=ft.Text(menu_tabs_config[1]['title'], size=20, weight=ft.FontWeight.W_200)
+                        title=ft.Text(menu_tabs_config[1]['title'], size=18)
                     ),
                     on_click=lambda _: change_screen("modules")),
                 width=600),
@@ -785,7 +969,7 @@ def main(page: ft.Page):
                 ft.Container(
                     content=ft.ListTile(
                         leading=ft.Icon(menu_tabs_config[2]['icon']),
-                        title=ft.Text(menu_tabs_config[2]['title'], size=20, weight=ft.FontWeight.W_200)
+                        title=ft.Text(menu_tabs_config[2]['title'], size=18)
                     ),
                     on_click=lambda _: change_screen("mentors")),
                 width=600),
@@ -793,7 +977,15 @@ def main(page: ft.Page):
                 ft.Container(
                     content=ft.ListTile(
                         leading=ft.Icon(menu_tabs_config[3]['icon']),
-                        title=ft.Text(menu_tabs_config[3]['title'], size=20, weight=ft.FontWeight.W_200)
+                        title=ft.Text(menu_tabs_config[3]['title'], size=18)
+                    ),
+                    on_click=lambda _: change_screen("docs")),
+                width=600),
+            ft.Card(
+                ft.Container(
+                    content=ft.ListTile(
+                        leading=ft.Icon(menu_tabs_config[4]['icon']),
+                        title=ft.Text(menu_tabs_config[4]['title'], size=18)
                     ),
                     on_click=lambda _: change_screen("settings")),
                 width=600)
@@ -1205,7 +1397,7 @@ def main(page: ft.Page):
     url_params = parse_qs(current_url.query)
     if current_url.path == '/':
         if platform.system() == "Windows":
-            change_screen("settings")
+            change_screen("login")
         else:
             change_screen("login")
 

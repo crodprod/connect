@@ -10,3 +10,4 @@ requests==2.31.0
 convertapi==1.8.0
 xlrd==1.2.0
 transliterate==1.10.2
+pypdf==4.2.0
