@@ -270,7 +270,7 @@ async def deep_linking(message: Message, command: CommandObject):
     if target in ['children', 'mentors', 'teachers', 'admins']:
         if not await is_registered(telegram_id):
             if await is_pass_phrase_ok(target, pass_phrase):
-                query = f"UPDATE {target} SET telegram_id = %s, status = 'active' WHERE pass_phrase = %s"
+                query = f"UPDATE {target} SET telegram_id = %s WHERE pass_phrase = %s"
                 db.connect()
                 db.execute_query(query, (telegram_id, pass_phrase,))
                 db.disconnect()
