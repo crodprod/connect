@@ -584,12 +584,12 @@ def main(page: ft.Page):
                     get_reboot_card(
                         title="Коннект",
                         icon=ft.icons.CONNECT_WITHOUT_CONTACT,
-                        target="crod_connect_bot"
+                        target="crod_connect"
                     ),
                     get_reboot_card(
                         title="Audio",
                         icon=ft.icons.SPATIAL_AUDIO,
-                        target="crod_audio"
+                        target="crod_tasker"
                     ),
                     get_reboot_card(
                         title="Таскер",
