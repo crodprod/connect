@@ -154,6 +154,7 @@ async def send_hello(telegram_id: int, table: str):
     db.connect()
     user_info = db.execute_query(query, (telegram_id,))
     if table == 'children':
+        print(f"@{os.getenv('ID_CHANNEL')}", telegram_id)
         member_info = await bot.get_chat_member(chat_id=f"@{os.getenv('ID_CHANNEL')}", user_id=telegram_id)
         if type(member_info) != types.chat_member_left.ChatMemberLeft:
             query = f"SELECT * FROM mentors WHERE group_num = %s and status = 'active'"
@@ -942,11 +943,12 @@ async def main():
         hour=schedule['stop_feedback']['hour'],
         minute=schedule['stop_feedback']['minute'])
     scheduler.start()
-    await bot.send_message(
-        chat_id=os.getenv('ID_GROUP_ERRORS'),
-        text="<b>Перезагрузка сервисов</b>"
-             "\n\nТелеграмм-бот перезагружен!"
-    )
+    if platform.system() != "Windows":
+        await bot.send_message(
+            chat_id=os.getenv('ID_GROUP_ERRORS'),
+            text="<b>Перезагрузка сервисов</b>"
+                 "\n\nТелеграмм-бот перезагружен!"
+        )
     await bot(DeleteWebhook(drop_pending_updates=True))
     await dp.start_polling(bot)
 

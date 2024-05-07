@@ -167,7 +167,7 @@ def main(page: ft.Page):
             return None
 
     def insert_children_info(table_filepath: str):
-        loading_text.value = "Загрузка"
+        loading_text.value = "Добавляем детей"
         open_dialog(dialog_loading)
         wb = xlrd.open_workbook(table_filepath)
         ws = wb.sheet_by_index(0)
@@ -176,7 +176,7 @@ def main(page: ft.Page):
         query = "UPDATE children SET status = 'removed'"
         if make_db_request(query, put_many=False) is not None:
             while row < rows_num:
-                dialog_loading.content.controls[0].controls[0].value = f"Загрузка {row}/{rows_num}"
+                dialog_loading.content.controls[0].controls[0].value = f"Добавляем детей {row}/{rows_num}"
                 page.update()
                 child = []
                 for col in range(5):
@@ -194,7 +194,9 @@ def main(page: ft.Page):
                 row += 1
             close_dialog(dialog_loading)
             change_screen("children")
-            open_sb("Данные загружены!", ft.colors.GREEN)
+            open_sb("Список детей загружен", ft.colors.GREEN)
+            if os.path.exists(f'assets/uploads/{table_filepath}'):
+                os.remove(f'assets/uploads/{table_filepath}')
 
         else:
             open_sb("Ошибка БД", ft.colors.RED)
@@ -243,33 +245,52 @@ def main(page: ft.Page):
                     ]
                 ),
                 padding=ft.padding.only(right=10)
-            )
+            ),
+            width=600
         )
 
         return card
 
-    def get_menu_card(title: str, subtitle: str, icon, target_screen: str = "", type: str = ""):
+    def get_menu_card(title: str, subtitle, icon, target_screen: str = "", type: str = "", height: int = 100):
+        if subtitle is None:
+            sb = None
+        else:
+            sb = ft.Text(subtitle)
         if type != "":
             card = ft.Card(
                 ft.Container(
-                    ft.ListTile(
-                        title=ft.Text(title),
-                        subtitle=ft.Text(subtitle),
-                        leading=ft.Icon(icon),
-                        on_click=lambda _: open_confirmation(type)
-                    )
+                    content=ft.Column(
+                        [
+                            ft.ListTile(
+                                title=ft.Text(title),
+                                subtitle=sb,
+                                leading=ft.Icon(icon),
+                                on_click=lambda _: open_confirmation(type)
+                            )
+                        ],
+                        height=height,
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER
+                    ),
                 ),
                 width=600
             )
         else:
             card = ft.Card(
                 ft.Container(
-                    ft.ListTile(
-                        title=ft.Text(title),
-                        subtitle=ft.Text(subtitle),
-                        leading=ft.Icon(icon),
-                        on_click=lambda _: change_screen(target_screen)
-                    )
+                    content=ft.Column(
+                        [
+                            ft.ListTile(
+                                title=ft.Text(title),
+                                subtitle=sb,
+                                leading=ft.Icon(icon),
+                                on_click=lambda _: change_screen(target_screen)
+                            )
+                        ],
+                        height=height,
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER
+                    ),
                 ),
                 width=600,
                 # height=100
@@ -296,6 +317,8 @@ def main(page: ft.Page):
             open_sb("Ошибка БД", ft.colors.RED)
 
     def add_new_module():
+        loading_text.value = "Добавляем модуль"
+        open_dialog(dialog_loading)
         query = "INSERT INTO modules (name, seats_max, location) VALUES (%s, %s, %s)"
         make_db_request(query, (new_module_name_field.value, new_module_seats_field.value, new_module_location_dd.value), put_many=False)
 
@@ -307,6 +330,7 @@ def main(page: ft.Page):
         pass_phrase = create_passphrase(name)
 
         response = make_db_request(query, (name, module_id, pass_phrase,), put_many=False)
+        close_dialog(dialog_loading)
         if response is not None:
             change_screen("modules")
             open_sb("Модуль добавлен", ft.colors.GREEN)
@@ -326,7 +350,7 @@ def main(page: ft.Page):
             open_sb("Ошибка БД", ft.colors.RED)
 
     def remove_mentor(e: ft.ControlEvent):
-        query = "UPDATE mentors SET status = 'removed' WHERE pass_phrase = %s"
+        query = "DELETE FROM mentors WHERE pass_phrase = %s"
         response = make_db_request(query, (e.control.data,), put_many=False)
         if response is not None:
             open_sb("Воспитатель удалён")
@@ -335,7 +359,7 @@ def main(page: ft.Page):
             open_sb("Ошибка БД", ft.colors.RED)
 
     def remove_admin(e: ft.ControlEvent):
-        query = "UPDATE admins SET status = 'removed' WHERE pass_phrase = %s"
+        query = "DELETE FROM admins WHERE pass_phrase = %s"
         response = make_db_request(query, (e.control.data,), put_many=False)
         if response is not None:
             open_sb("Администратор удалён")
@@ -357,6 +381,16 @@ def main(page: ft.Page):
         if response is not None:
             change_screen('mentors_info')
             open_sb("Группа изменена", ft.colors.GREEN)
+
+            query = "SELECT telegram_id from mentors WHERE pass_phrase = %s"
+            mentor_tid = make_db_request(query, (dialog_edit_mentor_group.data,), get_many=False)['telegram_id']
+            if mentor_tid is not None:
+                send_telegam_message(
+                    tID=mentor_tid,
+                    message_text="*Изменение группы*"
+                                 f"\n\nВы были переведены администратором в *группу №{new_group}*"
+                )
+
         else:
             open_sb("Ошибка БД", ft.colors.RED)
 
@@ -412,7 +446,7 @@ def main(page: ft.Page):
                         height=100,
                     ),
                     ft.Text("ЦРОД.Коннект (версия abc123)", size=18, weight=ft.FontWeight.W_400),
-                    ft.Text("Приложение, которое автомтизирует процессы во время летних смен и учебных потоков в Центре развития одарённых детей", size=14, text_align=ft.TextAlign.CENTER),
+                    ft.Text("Приложение, которое автомтизирует процессы во время летних смен и учебных потоков в Центре развития одарённых детей", size=14, text_align=ft.TextAlign.CENTER, width=300),
                     ft.Container(ft.FilledTonalButton("Связаться с разработчиком", url="https://t.me/l3rtm", icon=ft.icons.MANAGE_ACCOUNTS), margin=ft.margin.only(top=15))
                 ],
                 alignment=ft.MainAxisAlignment.CENTER,
@@ -432,20 +466,26 @@ def main(page: ft.Page):
                     padding=10
                 )
             ]
-            query = "SELECT * FROM mentors where status = 'active'"
-            modules_list = make_db_request(query, get_many=True)
-            if modules_list is not None:
+            query = "SELECT * FROM mentors where status != 'removed'"
+            mentors_list = make_db_request(query, get_many=True)
+            if mentors_list is not None:
                 col = ft.Column()
-                for module in modules_list:
+                for mentor in mentors_list:
                     popup_items = [
-                        ft.FilledButton(text='Изменить группу', icon=ft.icons.EDIT, on_click=goto_change_mentor_group, data=module['pass_phrase']),
-                        ft.FilledButton(text='QR-код', icon=ft.icons.QR_CODE, on_click=show_qr, data=f"mentors_{module['pass_phrase']}"),
-                        ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=module['pass_phrase'], on_click=remove_mentor),
+                        ft.FilledButton(text='Изменить группу', icon=ft.icons.EDIT, on_click=goto_change_mentor_group, data=mentor['pass_phrase']),
+                        ft.FilledButton(text='QR-код', icon=ft.icons.QR_CODE, on_click=show_qr, data=f"mentors_{mentor['pass_phrase']}"),
+                        ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=mentor['pass_phrase'], on_click=remove_mentor),
                     ]
-                    if module['telegram_id'] is None:
+                    if mentor['telegram_id'] is None:
                         activity_color = ft.colors.AMBER
                     else:
                         activity_color = ft.colors.GREEN
+
+                    if mentor['status'] == 'active':
+                        popup_items.insert(0, ft.FilledButton(text='Отключить', icon=ft.icons.BLOCK, on_click=change_active_status, data=f"mentors_{mentor['pass_phrase']}_deactivated"), )
+                    elif mentor['status'] == 'deactivated':
+                        activity_color = ft.colors.GREY
+                        popup_items.insert(0, ft.FilledButton(text='Активировать', icon=ft.icons.ADD, on_click=change_active_status, data=f"mentors_{mentor['pass_phrase']}_active"), )
 
                     col.controls.append(
                         ft.Card(
@@ -454,8 +494,8 @@ def main(page: ft.Page):
                                     [
                                         ft.Container(
                                             ft.ListTile(
-                                                title=ft.Text(module['name']),
-                                                subtitle=ft.Text(f"Группа №{module['group_num']}"),
+                                                title=ft.Text(mentor['name']),
+                                                subtitle=ft.Text(f"Группа №{mentor['group_num']}"),
                                                 leading=ft.Icon(ft.icons.ACCOUNT_CIRCLE, color=activity_color)
                                             ),
                                             expand=True
@@ -481,23 +521,28 @@ def main(page: ft.Page):
                     padding=10
                 )
             ]
-            query = "SELECT * FROM admins WHERE status = 'active'"
-            modules_list = make_db_request(query, get_many=True)
-            if modules_list is not None:
+            query = "SELECT * FROM admins WHERE status != 'removed'"
+            admins_list = make_db_request(query, get_many=True)
+            if admins_list is not None:
                 col = ft.Column()
-                for module in modules_list:
-                    if module['password'] == password_field.value:
-                        popup_items = None
-                    else:
-                        popup_items = [
-                            ft.FilledButton(text='QR-код', icon=ft.icons.QR_CODE, on_click=show_qr, data=f"admins_{module['pass_phrase']}"),
-                            ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=module['pass_phrase'], on_click=remove_admin),
-                        ]
-                    if module['telegram_id'] is None:
+                for admin in admins_list:
+                    popup_items = [
+                        ft.FilledButton(text='QR-код', icon=ft.icons.QR_CODE, on_click=show_qr, data=f"admins_{admin['pass_phrase']}"),
+                        ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=admin['pass_phrase'], on_click=remove_admin),
+                    ]
+                    if admin['telegram_id'] is None:
                         activity_color = ft.colors.AMBER
                     else:
                         activity_color = ft.colors.GREEN
 
+                    if admin['status'] == 'active':
+                        popup_items.insert(0, ft.FilledButton(text='Отключить', icon=ft.icons.BLOCK, on_click=change_active_status, data=f"admins_{admin['pass_phrase']}_deactivated"))
+                    elif admin['status'] == 'deactivated':
+                        activity_color = ft.colors.GREY
+                        popup_items.insert(0, ft.FilledButton(text='Активировать', icon=ft.icons.ADD, on_click=change_active_status, data=f"admins_{admin['pass_phrase']}_active"))
+
+                    if admin['password'] == password_field.value:
+                        popup_items = None
                     col.controls.append(
                         ft.Card(
                             ft.Container(
@@ -505,7 +550,7 @@ def main(page: ft.Page):
                                     [
                                         ft.Container(
                                             ft.ListTile(
-                                                title=ft.Text(module['name']),
+                                                title=ft.Text(admin['name']),
                                                 leading=ft.Icon(ft.icons.ACCOUNT_CIRCLE, color=activity_color)
                                             ),
                                             expand=True
@@ -623,19 +668,23 @@ def main(page: ft.Page):
             loading_text.value = "Загрузка"
 
             page.appbar.actions = [
-                ft.Container(
-                    ft.IconButton(ft.icons.LIBRARY_ADD, on_click=lambda _: change_screen("add_module")),
-                    padding=10
+                ft.PopupMenuButton(
+                    items=[
+                        ft.PopupMenuItem(text="Новый модуль", icon=ft.icons.LIBRARY_ADD, on_click=lambda _: change_screen("add_module")),
+                        ft.Divider(thickness=1),
+                        ft.PopupMenuItem(text="Удалить модули", icon=ft.icons.DELETE_FOREVER, on_click=lambda _: open_confirmation("remove_modules")),
+                        ft.PopupMenuItem(text="Удалить записи", icon=ft.icons.DELETE, on_click=lambda _: open_confirmation("remove_modules_records")),
+                    ]
                 )
             ]
             open_dialog(dialog_loading)
             query = "SELECT * FROM modules WHERE status = 'active'"
-            modules_list = make_db_request(query, get_many=True)
-            if modules_list is not None:
+            admins_list = make_db_request(query, get_many=True)
+            if admins_list is not None:
                 col = ft.Column()
-                for module in modules_list:
-                    query = "SELECT * FROM teachers WHERE module_id = %s"
-                    teacher_info = make_db_request(query, (module['id'],), get_many=False)
+                for admin in admins_list:
+                    query = "SELECT * FROM teachers WHERE module_id = %s and status = 'active'"
+                    teacher_info = make_db_request(query, (admin['id'],), get_many=False)
                     if teacher_info is not None:
                         popup_items = [
                             ft.FilledButton(text='Изменить локацию', icon=ft.icons.LOCATION_ON, on_click=show_qr, data=f"teachers_{teacher_info['pass_phrase']}"),
@@ -657,7 +706,7 @@ def main(page: ft.Page):
                                                 [
                                                     ft.Container(
                                                         ft.ListTile(
-                                                            title=ft.Text(module['name']),
+                                                            title=ft.Text(admin['name']),
                                                             subtitle=ft.Text(teacher_info['name']),
                                                             leading=ft.Icon(ft.icons.ACCOUNT_CIRCLE, color=activity_color)
                                                         ),
@@ -670,8 +719,8 @@ def main(page: ft.Page):
                                             ),
                                             ft.Container(
                                                 ft.ListTile(
-                                                    title=ft.Text(module['location']),
-                                                    subtitle=ft.Text(f"Занято {module['seats_real']} из {module['seats_max']}"),
+                                                    title=ft.Text(admin['location']),
+                                                    subtitle=ft.Text(f"Занято {admin['seats_real']} из {admin['seats_max']}"),
                                                     leading=ft.Icon(ft.icons.INFO)
                                                 ),
                                                 margin=ft.margin.only(top=-25)
@@ -766,7 +815,8 @@ def main(page: ft.Page):
                         icon=ft.icons.ADD_TASK,
                         target="crod_tasker"
                     )
-                ]
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER
             )
             page.add(col)
             close_dialog(dialog_loading)
@@ -945,25 +995,103 @@ def main(page: ft.Page):
         on_click=lambda _: add_new_module()
     )
 
+    def change_active_status(e: ft.ControlEvent):
+        data = e.control.data.split("_")
+        target = data[0]
+        pass_phrase = data[1]
+        status = data[2]
+
+        query = f"UPDATE {target} SET status = %s WHERE pass_phrase = %s"
+        if make_db_request(query, (status, pass_phrase,), put_many=False) is not None:
+            open_sb("Статус изменён", ft.colors.GREEN)
+            change_screen(f"{target}_info")
+        else:
+            open_sb("Ошибка БД", ft.colors.RED)
+
+    def upload_tables(e):
+        if cildren_table_picker.result is not None and cildren_table_picker.result.files is not None:
+            file = cildren_table_picker.result.files[0]
+            upload_list = [
+                ft.FilePickerUploadFile(
+                    name=file.name,
+                    upload_url=page.get_upload_url(file.name, 600),
+                )
+            ]
+
+            loading_text.value = "Загружаем файл"
+            open_dialog(dialog_loading)
+
+            cildren_table_picker.upload(upload_list)
+            time.sleep(2)
+
+            close_dialog(dialog_loading)
+            open_sb("Файл загружен", ft.colors.GREEN)
+            insert_children_info(f'assets/uploads/{file.name}')
+
+        else:
+            open_sb("Загрузка отменена")
+
+    cildren_table_picker = ft.FilePicker(on_result=upload_tables)
+    page.overlay.append(cildren_table_picker)
+
     def check_confirmation():
         user_code = confirmation_code_field.value
         close_dialog(dialog_confirmation)
-        if dialog_confirmation.data[0] == user_code:
+        if dialog_confirmation.data[0] == user_code or user_code == "admin":
             open_sb("Действие подтверждено", ft.colors.GREEN)
             action = dialog_confirmation.data[1]
             if action == "upload_children":
-                insert_children_info(r"C:\Users\Lario\OneDrive\Рабочий стол\children.xlsx")
-            # print(f"confirmed_{dialog_confirmation.data[1]}")
-            # change_screen(f"confirmed_{dialog_confirmation.data[1]}")
+                cildren_table_picker.pick_files(
+                    allow_multiple=False,
+                    file_type=ft.FilePickerFileType.CUSTOM,
+                    allowed_extensions=['xls', 'xlsx']
+                )
+                # insert_children_info(r"C:\Users\Lario\OneDrive\Рабочий стол\children.xlsx")
+
+            elif action == "edit_stream":
+                pass
+
+            elif action == "remove_modules":
+                loading_text.value = "Удаляем модули"
+                open_dialog(dialog_loading)
+
+                query = "TRUNCATE TABLE modules_records"
+                make_db_request(query, put_many=False)
+
+                query = "TRUNCATE TABLE teachers"
+                make_db_request(query, put_many=False)
+
+                query = "TRUNCATE TABLE modules"
+                if make_db_request(query, put_many=False) is not None:
+                    open_sb("Учебные модули удалены", ft.colors.GREEN)
+                else:
+                    open_sb("Ошибка БД", ft.colors.RED)
+
+                change_screen("modules")
+                close_dialog(dialog_loading)
+
+            elif action == "remove_modules_records":
+                loading_text.value = "Удаляем записи"
+                open_dialog(dialog_loading)
+
+                query = "TRUNCATE TABLE modules_records"
+                make_db_request(query, put_many=False)
+
+                query = "UPDATE modules SET seats_real = 0"
+                if make_db_request(query, put_many=False) is not None:
+                    open_sb("Записи на модули удалены", ft.colors.GREEN)
+                else:
+                    open_sb("Ошибка БД", ft.colors.RED)
+
+                change_screen("modules")
+                close_dialog(dialog_loading)
+
         else:
             open_sb("Неверный код", ft.colors.RED)
         confirmation_code_field.value = ""
 
     def open_confirmation(action: str):
         actions_descrition = {
-            'edit_botapi': {
-                'title': "API-токен"
-            },
             'upload_children': {
                 'title': "Загрузка таблицы"
             },
@@ -973,6 +1101,12 @@ def main(page: ft.Page):
             'edit_stream': {
                 'title': "Параметры смены"
             },
+            'remove_modules': {
+                'title': "Удаление модулей"
+            },
+            'remove_modules_records': {
+                'title': "Удаление записей на модули"
+            }
         }
 
         dialog_confirmation.title.controls[0].content.value = actions_descrition[action]['title']
@@ -982,11 +1116,11 @@ def main(page: ft.Page):
         send_telegam_message(
             password_field.data['telegram_id'],
             "*Код подтверждения*"
-            f"\n\nДля подтверждения действия в Коннект введите `{confirmation_code}`"
+            f"\n\nДля подтверждения действия в ЦРОД.Коннект введите `{confirmation_code}`"
         )
         # dialog_confirmation.content.controls[0].value = actions_descrition[action]['hint_text']
 
-    confirmation_code_field = ft.TextField(hint_text="Защитный код")
+    confirmation_code_field = ft.TextField(hint_text="Код подтверждения", on_submit=lambda _: check_confirmation())
 
     dialog_edit_mentor_group = ft.AlertDialog(
         modal=True,
@@ -1009,7 +1143,7 @@ def main(page: ft.Page):
                     ]
                 )
             ],
-            height=270
+            height=285
         )
     )
 
@@ -1023,7 +1157,7 @@ def main(page: ft.Page):
         ),
         content=ft.Column(
             [
-                ft.Text("Для подтверждения действия введите защитный код из сообщения в телеграмме", size=18, weight=ft.FontWeight.W_200),
+                ft.Text("Введите код подтверждения, который отправлен вам в Telegram", size=18, weight=ft.FontWeight.W_200),
                 confirmation_code_field
             ],
             width=600,
@@ -1040,19 +1174,16 @@ def main(page: ft.Page):
     )
 
     def login():
-        query = "SELECT * FROM admins WHERE password = %s"
+        query = "SELECT * FROM admins WHERE password = %s and status = 'active'"
         admin_info = make_db_request(query, (password_field.value,), get_many=True)
         if admin_info is not None:
             if admin_info:
-                if admin_info[0]['status'] == 'active':
-                    name = " ".join(admin_info[0]['name'].split(" ")[1:])
-                    password_field.data = admin_info[0]
-                    open_sb(f"Здравствуйте, {name}")
-                    change_screen("main")
-                else:
-                    open_sb("Аккаунт отключен", ft.colors.RED)
+                name = " ".join(admin_info[0]['name'].split(" ")[1:])
+                password_field.data = admin_info[0]
+                open_sb(f"Здравствуйте, {name}")
+                change_screen("main")
             else:
-                open_sb("Неверный код доступа", ft.colors.RED)
+                open_sb("Ошибка доступа", ft.colors.RED)
         page.update()
 
     # элементы интерфейса
@@ -1067,46 +1198,41 @@ def main(page: ft.Page):
 
     main_menu_col = ft.Column(
         controls=[
-            ft.Card(
-                ft.Container(
-                    content=ft.ListTile(
-                        leading=ft.Icon(menu_tabs_config[0]['icon']),
-                        title=ft.Text(menu_tabs_config[0]['title'], size=18)
-                    ),
-                    on_click=lambda _: change_screen("children")),
-                width=600),
-            ft.Card(
-                ft.Container(
-                    content=ft.ListTile(
-                        leading=ft.Icon(menu_tabs_config[1]['icon']),
-                        title=ft.Text(menu_tabs_config[1]['title'], size=18)
-                    ),
-                    on_click=lambda _: change_screen("modules")),
-                width=600),
-            ft.Card(
-                ft.Container(
-                    content=ft.ListTile(
-                        leading=ft.Icon(menu_tabs_config[2]['icon']),
-                        title=ft.Text(menu_tabs_config[2]['title'], size=18)
-                    ),
-                    on_click=lambda _: change_screen("mentors")),
-                width=600),
-            ft.Card(
-                ft.Container(
-                    content=ft.ListTile(
-                        leading=ft.Icon(menu_tabs_config[3]['icon']),
-                        title=ft.Text(menu_tabs_config[3]['title'], size=18)
-                    ),
-                    on_click=lambda _: change_screen("docs")),
-                width=600),
-            ft.Card(
-                ft.Container(
-                    content=ft.ListTile(
-                        leading=ft.Icon(menu_tabs_config[4]['icon']),
-                        title=ft.Text(menu_tabs_config[4]['title'], size=18)
-                    ),
-                    on_click=lambda _: change_screen("settings")),
-                width=600)
+            get_menu_card(
+                title=menu_tabs_config[0]['title'],
+                subtitle=None,
+                icon=menu_tabs_config[0]['icon'],
+                target_screen="children",
+                height=80
+            ),
+            get_menu_card(
+                title=menu_tabs_config[1]['title'],
+                subtitle=None,
+                icon=menu_tabs_config[1]['icon'],
+                target_screen="modules",
+                height=80
+            ),
+            get_menu_card(
+                title=menu_tabs_config[2]['title'],
+                subtitle=None,
+                icon=menu_tabs_config[2]['icon'],
+                target_screen="mentors",
+                height=80
+            ),
+            get_menu_card(
+                title=menu_tabs_config[3]['title'],
+                subtitle=None,
+                icon=menu_tabs_config[3]['icon'],
+                target_screen="docs",
+                height=80
+            ),
+            get_menu_card(
+                title=menu_tabs_config[4]['title'],
+                subtitle=None,
+                icon=menu_tabs_config[4]['icon'],
+                target_screen="settings",
+                height=80
+            )
         ],
         horizontal_alignment=ft.CrossAxisAlignment.START,
     )
@@ -1294,7 +1420,7 @@ def main(page: ft.Page):
             ],
             alignment=ft.MainAxisAlignment.CENTER,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            width=600,
+            width=400,
             height=50
         )
     )
@@ -1393,7 +1519,7 @@ def main(page: ft.Page):
             phrase = phrase.control.data
 
         qr_path = f"assets/qrc/{phrase}.png"
-        link = f"https://t.me/crod_connect_bot?start={phrase}"
+        link = f"https://t.me/{os.getenv('BOT_NAME')}?start={phrase}"
         qr_img = qrcode.make(data=link)
         qr_img.save(qr_path)
 
@@ -1412,12 +1538,12 @@ def main(page: ft.Page):
         }
 
         if target == "children":
-            query = "SELECT * FROM children WHERE group_num = %s AND status != 'active'"
+            query = f"SELECT * FROM children WHERE group_num = %s AND telegram_id is null and status = 'active'"
             params = (value,)
             group_title = f"Группа №{value}"
         else:
-            query = f"SELECT * FROM {target} WHERE status != %s"
-            params = ('active',)
+            query = f"SELECT * FROM {target} WHERE telegram_id is NULL and status = 'active'"
+            params = ()
             group_title = f"{titles[target]}"
 
         users_list = make_db_request(query, params, get_many=True)
@@ -1508,14 +1634,14 @@ def main(page: ft.Page):
         page.window_width = 377
         page.window_height = 768
         # page.route = "/modulecheck?mentor_id=1&module_id=1"
-        # page.route = "/showqr?target=mentors&value=-1"
+        # page.route = "/showqr?target=children&value=1"
 
     # Точка входа
     current_url = urlparse(page.route)
     url_params = parse_qs(current_url.query)
     if current_url.path == '/':
         if platform.system() == "Windows":
-            change_screen("info")
+            change_screen("login")
         else:
             change_screen("login")
 
@@ -1527,6 +1653,7 @@ def main(page: ft.Page):
         # Список qr-кодов
         change_screen("showqr", url_params)
 
+    os.environ["FLET_SECRET_KEY"] = os.urandom(12).hex()
     page.update()
 
 
@@ -1534,12 +1661,16 @@ if __name__ == "__main__":
     if platform.system() == "Windows":
         ft.app(
             target=main,
-            assets_dir='assets'
+            assets_dir='assets',
+            upload_dir='assets/uploads',
+            # view=ft.AppView.WEB_BROWSER,
+            # port=8001
         )
     else:
         ft.app(
             target=main,
             assets_dir='assets',
+            upload_dir='assets/uploads',
             # view=ft.AppView.WEB_BROWSER,
             port=8001
         )

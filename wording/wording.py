@@ -12,12 +12,12 @@ from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.shared import Pt, Inches
 from docxtpl import DocxTemplate
 from datetime import datetime
+from dotenv import load_dotenv
 
 current_directory = os.path.dirname(os.path.abspath(__file__))
 parent_directory = os.path.dirname(current_directory)
 
-# to-do:
-# Заменить конвертирование pdf на другой модуль
+load_dotenv()
 
 groups_dict = {
     "children": "Дети",
@@ -100,7 +100,7 @@ def get_qr_list(group: str, group_list: list, value: str = ""):
     group_list.sort(key=lambda user: user['name'])
     for user in group_list:
         # print(f"creating qr {user['pass_phrase']}")
-        qr_img = qrcode.make(f"https://t.me/crod_connect_bot?start={group}_{user['pass_phrase']}")
+        qr_img = qrcode.make(f"https://t.me/{os.getenv('BOT_NAME')}?start={group}_{user['pass_phrase']}")
         qr_img.save(f"{current_directory}/qr/{user['pass_phrase']}.png")
         # print('OK')
     users_count = len(group_list)
