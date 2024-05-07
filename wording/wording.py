@@ -99,10 +99,10 @@ def get_qr_list(group: str, group_list: list, value: str = ""):
 
     group_list.sort(key=lambda user: user['name'])
     for user in group_list:
-        print(f"creating qr {user['pass_phrase']}")
+        # print(f"creating qr {user['pass_phrase']}")
         qr_img = qrcode.make(f"https://t.me/crod_connect_bot?start={group}_{user['pass_phrase']}")
         qr_img.save(f"{current_directory}/qr/{user['pass_phrase']}.png")
-        print('OK')
+        # print('OK')
     users_count = len(group_list)
     rows, cols = math.ceil(users_count / 4), 4
     qr_table = doc.add_table(rows, cols)

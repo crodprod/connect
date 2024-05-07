@@ -42,7 +42,7 @@ def remove_folder_content(filepath):
                 shutil.rmtree(file_path)
         except Exception as e:
             pass
-    print('removed successfully')
+    # print('removed successfully')
 
 
 def create_db_connection():
@@ -165,7 +165,7 @@ def main(page: ft.Page):
                     child.append(ws.cell_value(row, col))
                 pass_phrase = create_passphrase(child[0])
                 birth = xlrd.xldate.xldate_as_tuple(child[1], 0)
-                print(birth)
+                # print(birth)
                 birth = f"{birth[0]}-{birth[1]}-{birth[2]}"
                 query = "INSERT INTO children (name, group_num, birth, comment, parrent_name, parrent_phone, pass_phrase) VALUES (%s, %s, %s, %s, %s, %s, %s)"
                 response = make_db_request(query, (child[0], random.randint(1, 5), birth, child[2], child[3], child[4], pass_phrase,), put_many=False)
@@ -265,7 +265,7 @@ def main(page: ft.Page):
     def create_passphrase(name):
         name = re.sub(r'[^a-zA-Zа-яА-ЯёЁ]', '', translit(''.join(name.split()[:2]), language_code='ru', reversed=True))
         phrase = f"{name}{os.urandom(3).hex()}"
-        print(phrase)
+        # print(phrase)
 
         return phrase
 
@@ -730,7 +730,7 @@ def main(page: ft.Page):
                     for group_num in range(1, 6):
                         query = "SELECT * FROM children WHERE group_num = %s AND status = 'active'"
                         group_list = make_db_request(query, (group_num,), get_many=True)
-                        print(group_list)
+                        # print(group_list)
                         if group_list is not None:
                             if group_list:
                                 qr_list_groups_filename = wording.wording.get_qr_list("children", group_list, str(group_num))
@@ -744,7 +744,7 @@ def main(page: ft.Page):
                     for s in ['mentors', 'teachers']:
                         query = f"SELECT * FROM {s} WHERE status = 'active'"
                         group_list = make_db_request(query, get_many=True)
-                        print(group_list)
+                        # print(group_list)
                         if group_list is not None:
                             if group_list:
                                 qr_list_groups_filename = wording.wording.get_qr_list(s, group_list)
