@@ -36,6 +36,13 @@ screens = {
         'scroll': ScrollMode.HIDDEN
 
     },
+    "reboot": {
+        "title": "Перезагрузка",
+        "lead_icon": icons.ARROW_BACK,
+        "target": "main",
+        'scroll': ScrollMode.HIDDEN
+
+    },
     "login": {
         "title": "Авторизация",
         "lead_icon": None,

@@ -3,6 +3,7 @@ import math
 import os
 import platform
 import re
+import subprocess
 import time
 
 import flet as ft
@@ -44,6 +45,27 @@ def create_db_connection():
         # elements.global_vars.DB_FAIL = True
         logging.error(f"DATABASE CONNECTION: {e}")
         return None, None
+
+
+def check_systemd(service_name: str) -> bool():
+    command = ['/usr/bin/systemctl', 'status', f'{service_name}.service']
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    output, error = process.communicate()
+    if process.returncode == 0:
+        text = output.decode()
+        if text[text.find('Active:') + 8:].split()[0] == 'active':
+            return True
+        return False
+    else:
+        return False
+
+
+def reboot_systemd(service_name: str):
+    command = ['/usr/bin/systemctl', 'restart', f'{service_name}.service']
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if process.returncode != 0:
+        return False
+    return True
 
 
 def main(page: ft.Page):
@@ -124,6 +146,57 @@ def main(page: ft.Page):
             pass
             # print('err 1')
 
+    def make_reboot(target: str):
+        if platform.system() == "Windows":
+            response = True
+        else:
+            response = reboot_systemd(target)
+
+        if response:
+            open_sb("Сервис перезагружен", ft.colors.GREEN)
+        else:
+            open_sb("Ошибка перезагрузки", ft.colors.RED)
+        change_screen("reboot")
+
+    def get_reboot_card(title: str, icon, target: str):
+        statuses = {
+            True: {
+                'icon': ft.Icon(ft.icons.CIRCLE, color=ft.colors.GREEN),
+                'text': ft.Text("работает")
+            },
+            False: {
+                'icon': ft.Icon(ft.icons.CIRCLE, color=ft.colors.RED),
+                'text': ft.Text("не доступен")
+            },
+        }
+        if platform.system() == "Windows":
+            status_value = False
+        else:
+            status_value = check_systemd(target)
+        card = ft.Card(
+            ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Container(
+                            ft.ListTile(
+                                title=ft.Text(title),
+                                # subtitle=ft.Row([statuses[status_value]['icon'], statuses[status_value]['text']], vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                                leading=statuses[status_value]['icon']
+                            ),
+                            expand=True
+                        ),
+                        ft.IconButton(
+                            ft.icons.RESTART_ALT,
+                            on_click=lambda _: make_reboot(target)
+                        )
+                    ]
+                ),
+                padding=ft.padding.only(right=10)
+            )
+        )
+
+        return card
+
     def get_menu_card(title: str, subtitle: str, icon, target_screen: str = "", type: str = ""):
         if type != "":
             card = ft.Card(
@@ -176,7 +249,7 @@ def main(page: ft.Page):
         name = new_admin_name_field.value.strip()
         pass_phrase = create_passphrase(name)
         password = os.urandom(3).hex()
-        response = make_db_request(query, (name, pass_phrase, password, ), put_many=False)
+        response = make_db_request(query, (name, pass_phrase, password,), put_many=False)
         if response is not None:
             change_screen("admins_info")
             open_sb("Администратор добавлен", ft.colors.GREEN)
@@ -275,10 +348,9 @@ def main(page: ft.Page):
                         ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=user['pass_phrase'], on_click=remove_mentor),
                     ]
                     if user['telegram_id'] is None:
-                        #     popup_items.insert(0, ft.PopupMenuItem(text='Активировать', icon=ft.icons.SWITCH_ACCOUNT),)
-                        bgcolor = ft.colors.AMBER
+                        activity_color = ft.colors.AMBER
                     else:
-                        bgcolor = None
+                        activity_color = ft.colors.GREEN
 
                     col.controls.append(
                         ft.Card(
@@ -288,9 +360,9 @@ def main(page: ft.Page):
                                         ft.Container(
                                             ft.ListTile(
                                                 title=ft.Text(user['name']),
-                                                subtitle=ft.Text(f"Группа №{user['group_num']}")
+                                                subtitle=ft.Text(f"Группа №{user['group_num']}"),
+                                                leading=ft.Icon(ft.icons.ACCOUNT_CIRCLE, color=activity_color)
                                             ),
-                                            margin=ft.margin.only(left=-15),
                                             expand=True
                                         ),
                                         ft.PopupMenuButton(
@@ -298,10 +370,9 @@ def main(page: ft.Page):
                                         )
                                     ]
                                 ),
-                                padding=15
+                                padding=ft.padding.only(right=10)
                             ),
-                            width=600,
-                            surface_tint_color=bgcolor
+                            width=600
                         )
                     )
                 page.add(col)
@@ -327,11 +398,9 @@ def main(page: ft.Page):
                             ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=user['pass_phrase'], on_click=remove_admin),
                         ]
                     if user['telegram_id'] is None:
-                        # popup_items.insert(0, ft.PopupMenuItem(text='Активировать', icon=ft.icons.SWITCH_ACCOUNT),)
-                        bgcolor = ft.colors.AMBER
+                        activity_color = ft.colors.AMBER
                     else:
-                        # popup_items.insert(0, ft.PopupMenuItem(text='Отключить', icon=ft.icons.SWITCH_ACCOUNT), )
-                        bgcolor = None
+                        activity_color = ft.colors.GREEN
 
                     col.controls.append(
                         ft.Card(
@@ -341,9 +410,8 @@ def main(page: ft.Page):
                                         ft.Container(
                                             ft.ListTile(
                                                 title=ft.Text(user['name']),
-                                                # subtitle=ft.Text(f"Группа №{user['group_num']}")
+                                                leading=ft.Icon(ft.icons.ACCOUNT_CIRCLE, color=activity_color)
                                             ),
-                                            margin=ft.margin.only(left=-15),
                                             expand=True
                                         ),
                                         ft.PopupMenuButton(
@@ -351,10 +419,9 @@ def main(page: ft.Page):
                                         )
                                     ]
                                 ),
-                                padding=15
+                                padding=ft.padding.only(right=10)
                             ),
-                            width=600,
-                            surface_tint_color=bgcolor
+                            width=600
                         )
                     )
                 page.add(col)
@@ -498,15 +565,40 @@ def main(page: ft.Page):
                     ),
                     get_menu_card(
                         title="Перезагрузка",
-                        subtitle="Перезагрузка копонентов сервисов ЦРОДа",
+                        subtitle="Перезагрузка сервисов ЦРОДа",
                         icon=ft.icons.RESTART_ALT,
-                        target_screen="main"
+                        target_screen="reboot"
                     )
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER
             )
             page.add(col)
-
+        elif target == "reboot":
+            col = ft.Column(
+                [
+                    get_reboot_card(
+                        title="Бот",
+                        icon=ft.icons.TELEGRAM,
+                        target="crod_connect_bot"
+                    ),
+                    get_reboot_card(
+                        title="Коннект",
+                        icon=ft.icons.CONNECT_WITHOUT_CONTACT,
+                        target="crod_connect_bot"
+                    ),
+                    get_reboot_card(
+                        title="Audio",
+                        icon=ft.icons.SPATIAL_AUDIO,
+                        target="crod_audio"
+                    ),
+                    get_reboot_card(
+                        title="Таскер",
+                        icon=ft.icons.ADD_TASK,
+                        target="crod_tasker"
+                    )
+                ]
+            )
+            page.add(col)
 
         # экраны из бота
         elif target == "showqr":
@@ -659,27 +751,6 @@ def main(page: ft.Page):
                     open_sb("Аккаунт отключен", ft.colors.RED)
             else:
                 open_sb("Неверный код доступа", ft.colors.RED)
-        page.update()
-
-    def change_navbar_tab(e):
-        if type(e) == int:
-            tab_index = e
-        else:
-            tab_index = e.control.selected_index
-
-        page.controls.clear()
-        page.appbar.title.value = menu_tabs_config[tab_index]['title']
-        page.scroll = menu_tabs_config[tab_index]['scroll']
-
-        if tab_index == 0:
-            page.add(settings_col)
-        elif tab_index == 1:
-            page.add(ft.Text("Экран 2"))
-        elif tab_index == 2:
-            page.add(ft.Text("Экран 3"))
-        elif tab_index == 3:
-            page.add(ft.Text("Экран 4"))
-
         page.update()
 
     # элементы интерфейса
@@ -924,6 +995,9 @@ def main(page: ft.Page):
         dialog.open = True
         page.update()
 
+        if dialog == dialog_loading:
+            time.sleep(1)
+
     def close_dialog(dialog: ft.AlertDialog):
         dialog.open = False
         page.update()
@@ -1131,7 +1205,7 @@ def main(page: ft.Page):
     url_params = parse_qs(current_url.query)
     if current_url.path == '/':
         if platform.system() == "Windows":
-            change_screen("login")
+            change_screen("settings")
         else:
             change_screen("login")
 
