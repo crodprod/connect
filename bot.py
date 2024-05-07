@@ -944,6 +944,11 @@ async def main():
     scheduler.start()
     await bot(DeleteWebhook(drop_pending_updates=True))
     await dp.start_polling(bot)
+    await bot.send_message(
+        chat_id=os.getenv('ID_GROUP_ERRORS'),
+        text="<b>Перезагрузка сервисов</b>"
+             "\n\nТелеграмм-бот перезагружен!"
+    )
 
 
 if __name__ == "__main__":

@@ -187,11 +187,8 @@ def main(page: ft.Page):
             response = True
         else:
             response = reboot_systemd(target)
+        open_sb("Сервис перезагружен", ft.colors.GREEN)
 
-        if response:
-            open_sb("Сервис перезагружен", ft.colors.GREEN)
-        else:
-            open_sb("Ошибка перезагрузки", ft.colors.RED)
         change_screen("reboot")
 
     def get_reboot_card(title: str, icon, target: str):
