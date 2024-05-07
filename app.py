@@ -85,6 +85,24 @@ def reboot_systemd(service_name: str):
     return True
 
 
+locations = [
+    "Гранат, 1 этаж, аудитория 1",
+    "Гранат, 1 этаж, аудитория 2",
+    "Гранат, 1 этаж, аудитория 3",
+    "Гранат, 1 этаж, аудитория 4",
+    "Гранат, 2 этаж, аудитория 1",
+    "Гранат, 2 этаж, аудитория 2",
+    "Гранат, 2 этаж, аудитория 3",
+    "Гранат, 2 этаж, аудитория 4",
+    "Гранат, 3 этаж, аудитория 1",
+    "Гранат, 3 этаж, аудитория 2",
+    "Гранат, 3 этаж, аудитория 3",
+    "Гранат, 3 этаж, аудитория 4",
+    "Гранат, 3 этаж, студия звукозаписи",
+    "Конференц-зал",
+]
+
+
 def main(page: ft.Page):
     # Настройки оформления страницы
     page.vertical_alignment = ft.MainAxisAlignment.CENTER,
@@ -277,8 +295,26 @@ def main(page: ft.Page):
         else:
             open_sb("Ошибка БД", ft.colors.RED)
 
+    def add_new_module():
+        query = "INSERT INTO modules (name, seats_max, location) VALUES (%s, %s, %s)"
+        make_db_request(query, (new_module_name_field.value, new_module_seats_field.value, new_module_location_dd.value), put_many=False)
+
+        query = "SELECT id FROM modules WHERE name = %s"
+        module_id = make_db_request(query, (new_module_name_field.value,), get_many=False)['id']
+
+        query = "INSERT INTO teachers (name, module_id, pass_phrase) VALUES (%s, %s, %s)"
+        name = new_module_teacher_name_field.value.strip()
+        pass_phrase = create_passphrase(name)
+
+        response = make_db_request(query, (name, module_id, pass_phrase,), put_many=False)
+        if response is not None:
+            change_screen("modules")
+            open_sb("Модуль добавлен", ft.colors.GREEN)
+        else:
+            open_sb("Ошибка БД", ft.colors.RED)
+
     def add_new_admin():
-        query = "INSERT INTO admins (name, pass_phrase, status, password) VALUES (%s, %s, 'active', %s)"
+        query = "INSERT INTO admins (name, pass_phrase, password) VALUES (%s, %s, %s)"
         name = new_admin_name_field.value.strip()
         pass_phrase = create_passphrase(name)
         password = os.urandom(3).hex()
@@ -336,6 +372,12 @@ def main(page: ft.Page):
                 btn_add_admin.disabled = False
             else:
                 btn_add_admin.disabled = True
+        elif target == "module":
+            if len(new_module_teacher_name_field.value.strip().split()) in [2, 3] and new_module_location_dd.value is not None and \
+                    new_module_seats_field.value.isnumeric() and new_module_name_field.value:
+                btn_add_module.disabled = False
+            else:
+                btn_add_module.disabled = True
 
         page.update()
 
@@ -362,6 +404,23 @@ def main(page: ft.Page):
             page.appbar.visible = False
             page.add(ft.Container(login_col, expand=True))
 
+        elif target == "info":
+            col = ft.Column(
+                [
+                    ft.Image(
+                        src='icons/loading-animation.png',
+                        height=100,
+                    ),
+                    ft.Text("ЦРОД.Коннект (версия abc123)", size=18, weight=ft.FontWeight.W_400),
+                    ft.Text("Приложение, которое автомтизирует процессы во время летних смен и учебных потоков в Центре развития одарённых детей", size=14, text_align=ft.TextAlign.CENTER),
+                    ft.Container(ft.FilledTonalButton("Связаться с разработчиком", url="https://t.me/l3rtm", icon=ft.icons.MANAGE_ACCOUNTS), margin=ft.margin.only(top=15))
+                ],
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=1
+            )
+            page.add(ft.Container(col, expand=True))
+
         elif target == "main":
             page.add(main_menu_col)
         elif target == "mentors_info":
@@ -374,16 +433,16 @@ def main(page: ft.Page):
                 )
             ]
             query = "SELECT * FROM mentors where status = 'active'"
-            users = make_db_request(query, get_many=True)
-            if users is not None:
+            modules_list = make_db_request(query, get_many=True)
+            if modules_list is not None:
                 col = ft.Column()
-                for user in users:
+                for module in modules_list:
                     popup_items = [
-                        ft.FilledButton(text='Изменить группу', icon=ft.icons.EDIT, on_click=goto_change_mentor_group, data=user['pass_phrase']),
-                        ft.FilledButton(text='QR-код', icon=ft.icons.QR_CODE, on_click=show_qr, data=f"mentors_{user['pass_phrase']}"),
-                        ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=user['pass_phrase'], on_click=remove_mentor),
+                        ft.FilledButton(text='Изменить группу', icon=ft.icons.EDIT, on_click=goto_change_mentor_group, data=module['pass_phrase']),
+                        ft.FilledButton(text='QR-код', icon=ft.icons.QR_CODE, on_click=show_qr, data=f"mentors_{module['pass_phrase']}"),
+                        ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=module['pass_phrase'], on_click=remove_mentor),
                     ]
-                    if user['telegram_id'] is None:
+                    if module['telegram_id'] is None:
                         activity_color = ft.colors.AMBER
                     else:
                         activity_color = ft.colors.GREEN
@@ -395,8 +454,8 @@ def main(page: ft.Page):
                                     [
                                         ft.Container(
                                             ft.ListTile(
-                                                title=ft.Text(user['name']),
-                                                subtitle=ft.Text(f"Группа №{user['group_num']}"),
+                                                title=ft.Text(module['name']),
+                                                subtitle=ft.Text(f"Группа №{module['group_num']}"),
                                                 leading=ft.Icon(ft.icons.ACCOUNT_CIRCLE, color=activity_color)
                                             ),
                                             expand=True
@@ -423,18 +482,18 @@ def main(page: ft.Page):
                 )
             ]
             query = "SELECT * FROM admins WHERE status = 'active'"
-            users = make_db_request(query, get_many=True)
-            if users is not None:
+            modules_list = make_db_request(query, get_many=True)
+            if modules_list is not None:
                 col = ft.Column()
-                for user in users:
-                    if user['password'] == password_field.value:
+                for module in modules_list:
+                    if module['password'] == password_field.value:
                         popup_items = None
                     else:
                         popup_items = [
-                            ft.FilledButton(text='QR-код', icon=ft.icons.QR_CODE, on_click=show_qr, data=f"admins_{user['pass_phrase']}"),
-                            ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=user['pass_phrase'], on_click=remove_admin),
+                            ft.FilledButton(text='QR-код', icon=ft.icons.QR_CODE, on_click=show_qr, data=f"admins_{module['pass_phrase']}"),
+                            ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=module['pass_phrase'], on_click=remove_admin),
                         ]
-                    if user['telegram_id'] is None:
+                    if module['telegram_id'] is None:
                         activity_color = ft.colors.AMBER
                     else:
                         activity_color = ft.colors.GREEN
@@ -446,7 +505,7 @@ def main(page: ft.Page):
                                     [
                                         ft.Container(
                                             ft.ListTile(
-                                                title=ft.Text(user['name']),
+                                                title=ft.Text(module['name']),
                                                 leading=ft.Icon(ft.icons.ACCOUNT_CIRCLE, color=activity_color)
                                             ),
                                             expand=True
@@ -464,29 +523,19 @@ def main(page: ft.Page):
                 page.add(col)
             close_dialog(dialog_loading)
         elif target == "add_module":
+            btn_add_module.disabled = True
+            new_module_name_field.value = None
+            new_module_location_dd.value = None
+            new_module_seats_field.value = None
+            new_module_teacher_name_field.value = None
             col = ft.Column(
                 controls=[
-                    ft.TextField(
-                        label="Название",
-                        hint_text="Программирование на python"
-                    ),
-                    ft.Dropdown(
-                        label="Локация",
-                        options=[ft.dropdown.Option(key=str(a), text=str(a)) for a in range(1, 6)]
-                    ),
-                    ft.TextField(
-                        label="Количество мест",
-                        hint_text="15"
-                    ),
+                    new_module_name_field,
+                    new_module_location_dd,
+                    new_module_seats_field,
                     ft.Container(ft.Divider(thickness=1)),
-                    ft.TextField(
-                        label="ФИО преподавателя",
-                        hint_text="Иванов Иван Иванович"
-                    ),
-                    ft.Row([ft.ElevatedButton(
-                        text="Добавить",
-                        icon=ft.icons.SAVE
-                    )], alignment=ft.MainAxisAlignment.END)
+                    new_module_teacher_name_field,
+                    ft.Row([btn_add_module], alignment=ft.MainAxisAlignment.END)
                 ],
                 width=600,
                 alignment=ft.MainAxisAlignment.START,
@@ -571,30 +620,71 @@ def main(page: ft.Page):
             page.add(col)
 
         elif target == "modules":
-            col = ft.Column(
-                controls=[
-                    get_menu_card(
-                        title="Новый модуль",
-                        subtitle="Создание нового модуля",
-                        icon=ft.icons.ADD_CIRCLE,
-                        target_screen="add_module"
-                    ),
-                    get_menu_card(
-                        title="Текущие модули",
-                        subtitle="Просмотр активных модулей",
-                        icon=ft.icons.VIEW_MODULE,
-                        target_screen="main"
-                    ),
-                    get_menu_card(
-                        title="Архив",
-                        subtitle="Просмотр архивированных модулей",
-                        icon=ft.icons.ARCHIVE,
-                        target_screen="main"
-                    )
-                ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER
-            )
-            page.add(col)
+            loading_text.value = "Загрузка"
+
+            page.appbar.actions = [
+                ft.Container(
+                    ft.IconButton(ft.icons.LIBRARY_ADD, on_click=lambda _: change_screen("add_module")),
+                    padding=10
+                )
+            ]
+            open_dialog(dialog_loading)
+            query = "SELECT * FROM modules WHERE status = 'active'"
+            modules_list = make_db_request(query, get_many=True)
+            if modules_list is not None:
+                col = ft.Column()
+                for module in modules_list:
+                    query = "SELECT * FROM teachers WHERE module_id = %s"
+                    teacher_info = make_db_request(query, (module['id'],), get_many=False)
+                    if teacher_info is not None:
+                        popup_items = [
+                            ft.FilledButton(text='Изменить локацию', icon=ft.icons.LOCATION_ON, on_click=show_qr, data=f"teachers_{teacher_info['pass_phrase']}"),
+                            ft.FilledButton(text='QR-код', icon=ft.icons.QR_CODE, on_click=show_qr, data=f"teachers_{teacher_info['pass_phrase']}"),
+                            ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=teacher_info['pass_phrase'], on_click=remove_admin),
+                        ]
+
+                        if teacher_info['telegram_id'] is None:
+                            activity_color = ft.colors.AMBER
+                        else:
+                            activity_color = ft.colors.GREEN
+
+                        col.controls.append(
+                            ft.Card(
+                                ft.Container(
+                                    content=ft.Column(
+                                        [
+                                            ft.Row(
+                                                [
+                                                    ft.Container(
+                                                        ft.ListTile(
+                                                            title=ft.Text(module['name']),
+                                                            subtitle=ft.Text(teacher_info['name']),
+                                                            leading=ft.Icon(ft.icons.ACCOUNT_CIRCLE, color=activity_color)
+                                                        ),
+                                                        expand=True
+                                                    ),
+                                                    ft.PopupMenuButton(
+                                                        items=popup_items
+                                                    )
+                                                ]
+                                            ),
+                                            ft.Container(
+                                                ft.ListTile(
+                                                    title=ft.Text(module['location']),
+                                                    subtitle=ft.Text(f"Занято {module['seats_real']} из {module['seats_max']}"),
+                                                    leading=ft.Icon(ft.icons.INFO)
+                                                ),
+                                                margin=ft.margin.only(top=-25)
+                                            )
+                                        ]
+                                    ),
+                                    padding=ft.padding.only(right=10)
+                                ),
+                                width=600
+                            )
+                        )
+                page.add(col)
+            close_dialog(dialog_loading)
 
         elif target == "mentors":
             col = ft.Column(
@@ -635,7 +725,7 @@ def main(page: ft.Page):
                         title="О приложении",
                         subtitle="Техническая информация",
                         icon=ft.icons.INFO,
-                        target_screen="main"
+                        target_screen="info"
                     )
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER
@@ -652,6 +742,10 @@ def main(page: ft.Page):
             ]
             col = ft.Column(
                 [
+                    ft.Row(
+                        [ft.Icon(ft.icons.CIRCLE, color=ft.colors.GREEN), ft.Text("доступно"), ft.Icon(ft.icons.CIRCLE, color=ft.colors.RED), ft.Text("требуется перезагрузка")],
+                        alignment=ft.MainAxisAlignment.CENTER
+                    ),
                     get_reboot_card(
                         title="Бот",
                         icon=ft.icons.TELEGRAM,
@@ -822,6 +916,33 @@ def main(page: ft.Page):
         icon=ft.icons.SAVE,
         disabled=True,
         on_click=lambda _: add_new_admin()
+    )
+
+    new_module_name_field = ft.TextField(
+        label="Название",
+        hint_text="Программирование на Python",
+        on_change=lambda _: validate('module')
+    )
+    new_module_location_dd = ft.Dropdown(
+        label="Локация",
+        options=[ft.dropdown.Option(key=loc, text=loc) for loc in locations],
+        on_change=lambda _: validate('module')
+    )
+    new_module_seats_field = ft.TextField(
+        label="Количество мест",
+        hint_text="15",
+        on_change=lambda _: validate('module')
+    )
+    new_module_teacher_name_field = ft.TextField(
+        label="ФИО преподавателя",
+        hint_text="Иванов Иван Иванович",
+        on_change=lambda _: validate('module')
+    )
+    btn_add_module = ft.ElevatedButton(
+        text="Добавить",
+        icon=ft.icons.SAVE,
+        disabled=True,
+        on_click=lambda _: add_new_module()
     )
 
     def check_confirmation():
@@ -1394,7 +1515,7 @@ def main(page: ft.Page):
     url_params = parse_qs(current_url.query)
     if current_url.path == '/':
         if platform.system() == "Windows":
-            change_screen("login")
+            change_screen("info")
         else:
             change_screen("login")
 

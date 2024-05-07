@@ -46,7 +46,7 @@ screens = {
     "reboot": {
         "title": "Перезагрузка",
         "lead_icon": icons.ARROW_BACK,
-        "target": "main",
+        "target": "settings",
         'scroll': ScrollMode.HIDDEN
 
     },
@@ -85,6 +85,12 @@ screens = {
         "lead_icon": icons.ARROW_BACK,
         "target": "mentors",
         'scroll': ScrollMode.HIDDEN
+    },
+    "info": {
+        "title": "О приложении",
+        "lead_icon": icons.ARROW_BACK,
+        "target": "settings",
+        'scroll': None
     },
     "showqr": {
         "title": "QR-коды",
