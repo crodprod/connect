@@ -458,14 +458,14 @@ def main(page: ft.Page):
         elif target == "main":
             page.add(main_menu_col)
         elif target == "mentors_info":
-            loading_text.value = "Загрузка"
-            open_dialog(dialog_loading)
             page.appbar.actions = [
                 ft.Container(
                     ft.IconButton(ft.icons.PERSON_ADD, on_click=lambda _: change_screen("add_mentor")),
                     padding=10
                 )
             ]
+            loading_text.value = "Загрузка"
+            open_dialog(dialog_loading)
             query = "SELECT * FROM mentors where status != 'removed'"
             mentors_list = make_db_request(query, get_many=True)
             if mentors_list is not None:
@@ -513,14 +513,14 @@ def main(page: ft.Page):
                 page.add(col)
                 close_dialog(dialog_loading)
         elif target == "admins_info":
-            loading_text.value = "Загрузка"
-            open_dialog(dialog_loading)
             page.appbar.actions = [
                 ft.Container(
                     ft.IconButton(ft.icons.PERSON_ADD, on_click=lambda _: change_screen("add_admin")),
                     padding=10
                 )
             ]
+            loading_text.value = "Загрузка"
+            open_dialog(dialog_loading)
             query = "SELECT * FROM admins WHERE status != 'removed'"
             admins_list = make_db_request(query, get_many=True)
             if admins_list is not None:
@@ -665,8 +665,6 @@ def main(page: ft.Page):
             page.add(col)
 
         elif target == "modules":
-            loading_text.value = "Загрузка"
-
             page.appbar.actions = [
                 ft.PopupMenuButton(
                     items=[
@@ -677,7 +675,9 @@ def main(page: ft.Page):
                     ]
                 )
             ]
+            loading_text.value = "Загрузка"
             open_dialog(dialog_loading)
+
             query = "SELECT * FROM modules WHERE status = 'active'"
             admins_list = make_db_request(query, get_many=True)
             if admins_list is not None:
@@ -781,14 +781,16 @@ def main(page: ft.Page):
             )
             page.add(col)
         elif target == "reboot":
-            loading_text.value = "Обновляем"
-            open_dialog(dialog_loading)
             page.appbar.actions = [
                 ft.Container(
                     ft.IconButton(ft.icons.RESTART_ALT, on_click=lambda _: change_screen("reboot")),
                     padding=10
                 )
             ]
+
+            loading_text.value = "Обновляем"
+            open_dialog(dialog_loading)
+
             col = ft.Column(
                 [
                     ft.Row(
