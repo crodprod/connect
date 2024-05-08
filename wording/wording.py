@@ -169,3 +169,45 @@ def get_feedback(module_name: str, feedback_list: []):
     convert_to_pdf(filename)
 
     return filename
+
+
+def get_modules_navigation(modules_list: list, title: str):
+    filename = f"navigation_{datetime.now().date().strftime('%d%m%Y')}"
+    doc = docx.Document(f'{current_directory}/templates/navigation.docx')
+
+    title_table = doc.tables[0]
+    navigation_table = doc.tables[1]
+    title_cell = title_table.cell(0, 1)
+    paragraph_title = title_cell.paragraphs[0]
+    run = paragraph_title.add_run(title)
+    run.alignment = WD_PARAGRAPH_ALIGNMENT.RIGHT
+    font = run.font
+    font.name = "Montserrat"
+    font.size = Pt(20)
+
+    for index, module in enumerate(modules_list):
+        navigation_table.add_row()
+        cell = navigation_table.cell(index, 0)
+        paragraph = cell.paragraphs[0]
+        paragraph.add_run().add_text(module['name'].upper())
+        paragraph.runs[-1].font.size = Pt(20)
+        paragraph.runs[-1].font.name = "Montserrat Black"
+        paragraph.runs[-1].alignment = WD_PARAGRAPH_ALIGNMENT.RIGHT
+
+        # cell = navigation_table.cell(index, 1)
+        # paragraph = cell.paragraphs[0]
+        # paragraph.add_run().add_text("→")
+        # paragraph.runs[-1].font.size = Pt(22)
+        # paragraph.runs[-1].font.name = "Montserrat Black"
+
+        cell = navigation_table.cell(index, 1)
+        paragraph = cell.paragraphs[0]
+        paragraph.add_run().add_text(module['location'].upper())
+        paragraph.runs[-1].font.size = Pt(20)
+        paragraph.runs[-1].font.name = "Montserrat Black"
+
+    doc.save(f"{current_directory}/generated/{filename}.docx")
+    convert_to_pdf(filename)
+
+    print(filename)
+    return filename

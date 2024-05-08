@@ -10,6 +10,7 @@ import time
 
 import flet as ft
 import qrcode
+import requests
 import xlrd
 from dotenv import load_dotenv
 from mysql.connector import connect, Error as sql_error
@@ -135,7 +136,11 @@ def main(page: ft.Page):
         with open(filepath, 'rb') as file:
             files = {'document': file}
             data = {'chat_id': tID, 'caption': description, 'parse_mode': "Markdown"}
-            post(url=url, data=data, files=files)
+            try:
+                post(url=url, data=data, files=files)
+                return True
+            except requests.exceptions.ConnectTimeout:
+                return False
 
     def make_db_request(sql_query: str, params: tuple = (), get_many: bool = None, put_many: bool = None):
         # обработка sql-запросов
@@ -626,6 +631,18 @@ def main(page: ft.Page):
                         subtitle="Загрузка таблицы с информацией о детях",
                         icon=ft.icons.UPLOAD_FILE,
                         type="upload_children"
+                    ),
+                    get_menu_card(
+                        title="Изменить группу",
+                        subtitle="Изменение номера группы ребёнка",
+                        icon=ft.icons.EDIT_DOCUMENT,
+                        type="upload_children"
+                    ),
+                    get_menu_card(
+                        title="Добавить ребёнка",
+                        subtitle="Единичное добавление нового ребёнка",
+                        icon=ft.icons.PERSON_ADD,
+                        type="upload_children"
                     )
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER
@@ -853,13 +870,15 @@ def main(page: ft.Page):
                     merger.write(merged_filepath)
                     merger.close()
                     caption += "Список групп (содержит только те группы, в которых есть хотя бы 1 ребёнок)"
-                    send_telegram_document(
+                    if send_telegram_document(
                         tID=response['telegram_id'],
                         filepath=merged_filepath,
                         description=caption
-                    )
-                    open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
-                    remove_folder_content(f"{current_directory}/wording/generated")
+                    ):
+                        open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
+                        remove_folder_content(f"{current_directory}/wording/generated")
+                    else:
+                        open_sb("Ошибка Telegram", ft.colors.RED)
                     if os.path.exists(merged_filepath):
                         os.remove(merged_filepath)
                     for pdf in pdf_filepaths:
@@ -902,25 +921,48 @@ def main(page: ft.Page):
                     merger.write(merged_filepath)
                     merger.close()
                     caption += "Таблица QR-кодов (содержит только те группы, в которых есть хотя бы 1 пользователь)"
-                    send_telegram_document(
+                    if send_telegram_document(
                         tID=response['telegram_id'],
                         filepath=merged_filepath,
                         description=caption
-                    )
+                    ):
+                        open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
+                    else:
+                        open_sb("Ошибка Telegram", ft.colors.RED)
+
                     remove_folder_content(f"{current_directory}/wording/qr")
                     remove_folder_content(f"{current_directory}/wording/generated")
-                    open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
                     if os.path.exists(merged_filepath):
                         os.remove(merged_filepath)
                     for pdf in pdf_filepaths:
                         if os.path.exists(pdf):
                             os.remove(pdf)
 
-
                 elif doctype == "modules":
                     pass
                 elif doctype == "navigation":
-                    pass
+                    query = "SELECT name from shift_info where id = 0"
+                    shift_name = make_db_request(query, get_many=False)
+
+                    query = "SELECT * FROM modules WHERE status = 'active'"
+                    modules = make_db_request(query, get_many=True)
+                    if modules is not None:
+                        navigation_filename = wording.wording.get_modules_navigation(modules, shift_name['name'])
+                        filepath = f"{current_directory}/wording/generated/{navigation_filename}.pdf"
+
+                        if send_telegram_document(
+                            tID=response['telegram_id'],
+                            filepath=filepath,
+                            description="*Генерация документов*"
+                                        "\n\nНавигация с распредлением образовательных модулей по аудиториям"
+                        ):
+                            open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
+                        else:
+                            open_sb("Ошибка Telegram", ft.colors.RED)
+                        if os.path.exists(filepath):
+                            os.remove(filepath)
+                    else:
+                        open_sb("Ошибка БД", ft.colors.RED)
             close_dialog(dialog_loading)
             change_screen("docs")
 
