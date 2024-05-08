@@ -171,12 +171,9 @@ async def send_hello(telegram_id: int, table: str):
                 reply_markup=kb_hello[table].as_markup()
             )
         else:
-            link = f"https://t.me/{os.getenv('ID_CHANNEL')}"
             await bot.send_message(
                 chat_id=telegram_id,
-                text="<b>Привет! Для начала тебе нужно подписаться на канал ЦРОДа, в нём мы публикуем все самые интересные новости о сменах и потоках</b>"
-                     f"\n\n{get_text_link('Открыть канал', link)}"
-                     "\n\nПосле того как подпишешься, возвращайся сюда и жми на кнопку под сообщением",
+                text="<b>Привет! Для начала тебе нужно подписаться на канал ЦРОДа, в нём мы публикуем все самые интересные новости о сменах и потоках</b>",
                 reply_markup=check_apply_to_channel_kb.as_markup()
             )
     elif table == 'mentors':

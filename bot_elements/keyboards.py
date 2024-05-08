@@ -1,6 +1,11 @@
+import os
+
+from dotenv import load_dotenv
 from aiogram.utils import keyboard
 from bot_elements.lexicon import base_crod_url
 from bot_elements.keyboard_builders import builder_teachers, builder_mentors, builder_children, builder_admins
+
+load_dotenv()
 
 tasker_kb = keyboard.InlineKeyboardBuilder(
     markup=[
@@ -23,6 +28,7 @@ radio_kb = keyboard.InlineKeyboardBuilder(
 
 check_apply_to_channel_kb = keyboard.InlineKeyboardBuilder(
     markup=[
+        [keyboard.InlineKeyboardButton(text="Подписаться", url=f"https://t.me/{os.getenv('ID_CHANNEL')}")],
         [keyboard.InlineKeyboardButton(text="Я подписался (-ась)!", callback_data="check_apply")]
     ]
 )
