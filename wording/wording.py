@@ -209,7 +209,7 @@ def get_modules_navigation(modules_list: list, title: str):
 
 
 def get_module_parts(children_list: list, module_info: list, teacher_info: list):
-    filename = f"module_{module_info['name']}_{datetime.now().date().strftime('%d%m%Y')}"
+    filename = f"module_{module_info['id']}_{datetime.now().date().strftime('%d%m%Y')}"
     doc = docx.Document(f'{current_directory}/templates/module_parts.docx')
 
     text_title = f"{module_info['name']}" \
