@@ -980,7 +980,8 @@ def main(page: ft.Page):
                             merger = PdfMerger()
 
                             for module in modules_list:
-                                dialog_loading.content.controls[0].controls[0].value = f"Генерируем документ ({module['name']})"
+
+                                dialog_loading.content.controls[0].controls[0].value = f"Генерируем документ ({module['name'][:10]}...)"
                                 page.update()
 
                                 query = "SELECT * FROM teachers WHERE module_id = %s and status = 'active'"
