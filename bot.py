@@ -291,13 +291,22 @@ async def deep_linking(message: Message, command: CommandObject):
             if user['login'] == pass_phrase:
                 fl = True
                 user['tid'] = message.chat.id
+                user_status = user['status']
                 break
         if fl:
             update_config_file(tasker_users, path)
+            if user_status == "adm":
+                message_text = "<b>Вы успешно создали доску в Таскере!</b>" \
+                               f"\n\nКод для входа: {pass_phrase}" \
+                               f"\nКод экрана: screen_{pass_phrase}" \
+                               f"\n\nСейчас вы можете вернуться обратно в Таскер"
+            else:
+                message_text = "<b>Твой Telegram-аккаунт подключен! Теперь новые задачи из Таскера будут приходить сюда</b>" \
+                               "\nКод для входа: {pass_phrase}" \
+                               "\n\nСейчас ты можешь вернуться обратно"
             await bot.send_message(
                 chat_id=message.chat.id,
-                text="<b>Твой телеграм-аккаунт подключен! Теперь новые задачи из Таскера будут приходить сюда</b>"
-                     "\n\nСейчас ты можешь вернуться обратно",
+                text=message_text,
                 reply_markup=tasker_kb.as_markup()
             )
 
