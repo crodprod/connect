@@ -209,5 +209,4 @@ def get_modules_navigation(modules_list: list, title: str):
     doc.save(f"{current_directory}/generated/{filename}.docx")
     convert_to_pdf(filename)
 
-    print(filename)
     return filename
