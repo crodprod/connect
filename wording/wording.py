@@ -186,7 +186,6 @@ def get_modules_navigation(modules_list: list, title: str):
     font.size = Pt(20)
 
     for index, module in enumerate(modules_list):
-        navigation_table.add_row()
         cell = navigation_table.cell(index, 0)
         paragraph = cell.paragraphs[0]
         paragraph.add_run().add_text(module['name'].upper())
@@ -205,6 +204,9 @@ def get_modules_navigation(modules_list: list, title: str):
         paragraph.add_run().add_text(module['location'].upper())
         paragraph.runs[-1].font.size = Pt(20)
         paragraph.runs[-1].font.name = "Montserrat Black"
+
+        if index != len(modules_list) - 1:
+            navigation_table.add_row()
 
     doc.save(f"{current_directory}/generated/{filename}.docx")
     convert_to_pdf(filename)

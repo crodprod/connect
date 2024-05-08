@@ -119,6 +119,7 @@ def main(page: ft.Page):
     page.fonts = {
         "Geologica": "fonts/Geologica.ttf",
     }
+    page.padding = 0
 
     # структры для хранения информации
     remaining_children_traffic = []
