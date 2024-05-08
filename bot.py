@@ -302,8 +302,8 @@ async def deep_linking(message: Message, command: CommandObject):
                                f"\n\nСейчас вы можете вернуться обратно в Таскер"
             else:
                 message_text = "<b>Твой Telegram-аккаунт подключен! Теперь новые задачи из Таскера будут приходить сюда</b>" \
-                               "\nКод для входа: {pass_phrase}" \
-                               "\n\nСейчас ты можешь вернуться обратно"
+                               f"\n\nКод для входа: {pass_phrase}" \
+                               "\n\nСейчас ты можешь вернуться обратно в Таскер"
             await bot.send_message(
                 chat_id=message.chat.id,
                 text=message_text,

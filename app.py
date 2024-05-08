@@ -172,6 +172,14 @@ def main(page: ft.Page):
             logging.error(f'CONNECTION ERROR')
             return None
 
+    def raise_error(location, error_message: str, screen: str):
+        if location == dialog_loading:
+            close_dialog(dialog_loading)
+            open_sb(error_message, ft.colors.RED)
+            if "createdoc" in screen:
+                change_screen("docs")
+
+
     def insert_children_info(table_filepath: str):
         loading_text.value = "Добавляем детей"
         open_dialog(dialog_loading)
@@ -844,42 +852,55 @@ def main(page: ft.Page):
         elif "createdocs" in target:
             loading_text.value = "Генерируем документ"
             open_dialog(dialog_loading)
+
             doctype = target.split("_")[1]
             pdf_filepaths = []
 
             query = "SELECT telegram_id from admins WHERE password = %s"
             response = make_db_request(query, (password_field.value,), get_many=False)
+
             if response['telegram_id'] is None:
                 open_sb("Вы не зарегистрированы в боте", ft.colors.RED)
             else:
                 caption = "*Генерация документов*\n\n"
                 if doctype == "groups":
                     merger = PdfMerger()
+
                     for group_num in range(1, 6):
+                        dialog_loading.content.controls[0].controls[0].value = f"Генерируем документ (группа {group_num}/{5})"
+                        page.update()
+
                         query = "SELECT * FROM children WHERE group_num = %s AND status = 'active'"
                         group_list = make_db_request(query, (group_num,), get_many=True)
+
                         if group_list is not None:
                             if group_list:
+                                group_list.sort(key=lambda el: el['name'])
+
                                 group_list_filename = wording.wording.get_grouplist(group_list, group_num)
                                 filepath = f"{current_directory}/wording/generated/{group_list_filename}.pdf"
+
                                 merger.append(filepath)
                                 pdf_filepaths.append(group_list_filename)
                         else:
-                            open_sb("Ошибка БД", ft.colors.RED)
-                            break
+                            raise_error(dialog_loading, "Ошибка получения списка группы", 'createdoc')
+                            return
+
                     merged_filepath = f"{current_directory}/wording/generated/grouplist.pdf"
                     merger.write(merged_filepath)
                     merger.close()
-                    caption += "Список групп (содержит только те группы, в которых есть хотя бы 1 ребёнок)"
+
+                    caption += "Списки групп с информацией о детях"
                     if send_telegram_document(
-                        tID=response['telegram_id'],
-                        filepath=merged_filepath,
-                        description=caption
+                            tID=response['telegram_id'],
+                            filepath=merged_filepath,
+                            description=caption
                     ):
                         open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
                         remove_folder_content(f"{current_directory}/wording/generated")
                     else:
                         open_sb("Ошибка Telegram", ft.colors.RED)
+
                     if os.path.exists(merged_filepath):
                         os.remove(merged_filepath)
                     for pdf in pdf_filepaths:
@@ -891,23 +912,32 @@ def main(page: ft.Page):
 
                     # для групп детей
                     for group_num in range(1, 6):
+                        dialog_loading.content.controls[0].controls[0].value = f"Генерируем документ (группа {group_num}/{5})"
+                        page.update()
+
                         query = "SELECT * FROM children WHERE group_num = %s AND status = 'active'"
                         group_list = make_db_request(query, (group_num,), get_many=True)
-                        # print(group_list)
+
                         if group_list is not None:
                             if group_list:
+                                group_list.sort(key=lambda el: el['name'])
+
                                 qr_list_groups_filename = wording.wording.get_qr_list("children", group_list, str(group_num))
                                 filepath = f"{current_directory}/wording/generated/{qr_list_groups_filename}.pdf"
+
                                 merger.append(filepath)
                                 pdf_filepaths.append(qr_list_groups_filename)
                         else:
-                            open_sb("Ошибка БД", ft.colors.RED)
-                            break
+                            raise_error(dialog_loading, "Ошибка получения списка группы", 'createdoc')
+                            return
                     # для остальных
                     for s in ['mentors', 'teachers']:
+                        dialog_loading.content.controls[0].controls[0].value = f"Генерируем документ ({s})"
+                        page.update()
+
                         query = f"SELECT * FROM {s} WHERE status = 'active'"
                         group_list = make_db_request(query, get_many=True)
-                        # print(group_list)
+
                         if group_list is not None:
                             if group_list:
                                 qr_list_groups_filename = wording.wording.get_qr_list(s, group_list)
@@ -915,24 +945,26 @@ def main(page: ft.Page):
                                 merger.append(filepath)
                                 pdf_filepaths.append(qr_list_groups_filename)
                         else:
-                            open_sb("Ошибка БД", ft.colors.RED)
-                            break
+                            raise_error(dialog_loading, "Ошибка получения списка группы", 'createdoc')
+                            return
 
                     merged_filepath = f"{current_directory}/wording/generated/qrlist.pdf"
                     merger.write(merged_filepath)
                     merger.close()
-                    caption += "Таблица QR-кодов (содержит только те группы, в которых есть хотя бы 1 пользователь)"
+
+                    caption += "Таблица QR-кодов для регистрации в Telegram-бота"
                     if send_telegram_document(
-                        tID=response['telegram_id'],
-                        filepath=merged_filepath,
-                        description=caption
+                            tID=response['telegram_id'],
+                            filepath=merged_filepath,
+                            description=caption
                     ):
                         open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
                     else:
-                        open_sb("Ошибка Telegram", ft.colors.RED)
+                        open_sb("Ошибка отправки в Telegram", ft.colors.RED)
 
                     remove_folder_content(f"{current_directory}/wording/qr")
                     remove_folder_content(f"{current_directory}/wording/generated")
+
                     if os.path.exists(merged_filepath):
                         os.remove(merged_filepath)
                     for pdf in pdf_filepaths:
@@ -940,22 +972,88 @@ def main(page: ft.Page):
                             os.remove(pdf)
 
                 elif doctype == "modules":
-                    pass
+                    query = "SELECT * FROM modules WHERE status = 'active'"
+                    modules_list = make_db_request(query, get_many=True)
+
+                    if modules_list is not None:
+                        if modules_list:
+                            merger = PdfMerger()
+
+                            for module in modules_list:
+                                dialog_loading.content.controls[0].controls[0].value = f"Генерируем документ ({module['name']})"
+                                page.update()
+
+                                query = "SELECT * FROM teachers WHERE module_id = %s and status = 'active'"
+                                teacher_info = make_db_request(query, (module['id'],), get_many=False)
+
+                                if teacher_info is not None:
+                                    query = "SELECT * FROM children WHERE id in (SELECT child_id FROM modules_records WHERE module_id = %s) and status = 'active'"
+                                    children_list = make_db_request(query, (module['id'],), get_many=True)
+
+                                    if children_list is not None:
+                                        if children_list:
+                                            children_list.sort(key=lambda el: el['name'])
+
+                                            filename = wording.wording.get_module_parts(children_list, module, teacher_info)
+                                            filepath = f"{current_directory}/wording/generated/{filename}.pdf"
+
+                                            merger.append(filepath)
+                                            pdf_filepaths.append(filename)
+
+                                    else:
+                                        raise_error(dialog_loading, "Ошибка получения списка детей", 'createdoc')
+                                        return
+                                else:
+                                    raise_error(dialog_loading, "Ошибка получения информации о преподавателе", 'createdoc')
+                                    return
+
+                            if len(pdf_filepaths) > 0:
+                                merged_filepath = f"{current_directory}/wording/generated/modulelist.pdf"
+                                merger.write(merged_filepath)
+                                merger.close()
+
+                                caption += "Состав образовательных модулей"
+
+                                if send_telegram_document(
+                                        tID=response['telegram_id'],
+                                        filepath=merged_filepath,
+                                        description=caption
+                                ):
+                                    open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
+                                else:
+                                    open_sb("Ошибка отправки в Telegram", ft.colors.RED)
+
+                                remove_folder_content(f"{current_directory}/wording/generated")
+                                if os.path.exists(merged_filepath):
+                                    os.remove(merged_filepath)
+                            else:
+                                open_sb("Записи на модули отсутствуют")
+                            for pdf in pdf_filepaths:
+                                if os.path.exists(pdf):
+                                    os.remove(pdf)
+                        else:
+                            raise_error(dialog_loading, "Список модулей пуст", 'createdoc')
+                            return
+                    else:
+                        raise_error(dialog_loading, "Ошибка получения списка модулей", 'createdoc')
+                        return
                 elif doctype == "navigation":
                     query = "SELECT name from shift_info where id = 0"
                     shift_name = make_db_request(query, get_many=False)
 
                     query = "SELECT * FROM modules WHERE status = 'active'"
                     modules = make_db_request(query, get_many=True)
+
                     if modules is not None:
                         navigation_filename = wording.wording.get_modules_navigation(modules, shift_name['name'])
                         filepath = f"{current_directory}/wording/generated/{navigation_filename}.pdf"
 
+                        caption += "Навигация по образовательным модулям"
+
                         if send_telegram_document(
-                            tID=response['telegram_id'],
-                            filepath=filepath,
-                            description="*Генерация документов*"
-                                        "\n\nНавигация с распредлением образовательных модулей по аудиториям"
+                                tID=response['telegram_id'],
+                                filepath=filepath,
+                                description=caption
                         ):
                             open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
                         else:
@@ -964,6 +1062,7 @@ def main(page: ft.Page):
                             os.remove(filepath)
                     else:
                         open_sb("Ошибка БД", ft.colors.RED)
+            pdf_filepaths.clear()
             close_dialog(dialog_loading)
             change_screen("docs")
 
@@ -1638,6 +1737,7 @@ def main(page: ft.Page):
         if children_list is not None:
 
             children_list_col = ft.Column(width=600)
+            children_list.sort(key=lambda el: el['name'])
             for child in children_list:
                 remaining_children_traffic.append(child['id'])
                 children_list_col.controls.append(

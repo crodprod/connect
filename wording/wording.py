@@ -78,7 +78,7 @@ def get_grouplist(group_list: list, group_num: int):
             cell_text = cell.paragraphs[0]
             run = cell_text.add_run(str(value))
             font = run.font
-            font.name = "Arial Light"
+            font.name = "Montserrat Medium"
             if j != 2:  # не выравнивается ячейка с особенностями
                 cell.paragraphs[0].alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
                 cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
@@ -125,7 +125,7 @@ def get_qr_list(group: str, group_list: list, value: str = ""):
                 name = " ".join(group_list[index]['name'].split(" ")[:2])
                 paragraph.add_run().add_text(name)
                 paragraph.runs[-1].font.size = Pt(11)
-                paragraph.runs[-1].font.name = "Arial"
+                paragraph.runs[-1].font.name = "Montserrat Medium"
 
                 image_path = f"{current_directory}/qr/{group_list[index]['pass_phrase']}.png"
                 paragraph.add_run().add_picture(image_path, width=Inches(1.7))
@@ -182,7 +182,7 @@ def get_modules_navigation(modules_list: list, title: str):
     run = paragraph_title.add_run(title)
     run.alignment = WD_PARAGRAPH_ALIGNMENT.RIGHT
     font = run.font
-    font.name = "Montserrat"
+    font.name = "Montserrat SemiBold"
     font.size = Pt(20)
 
     for index, module in enumerate(modules_list):
@@ -192,12 +192,6 @@ def get_modules_navigation(modules_list: list, title: str):
         paragraph.runs[-1].font.size = Pt(20)
         paragraph.runs[-1].font.name = "Montserrat Black"
         paragraph.runs[-1].alignment = WD_PARAGRAPH_ALIGNMENT.RIGHT
-
-        # cell = navigation_table.cell(index, 1)
-        # paragraph = cell.paragraphs[0]
-        # paragraph.add_run().add_text("→")
-        # paragraph.runs[-1].font.size = Pt(22)
-        # paragraph.runs[-1].font.name = "Montserrat Black"
 
         cell = navigation_table.cell(index, 1)
         paragraph = cell.paragraphs[0]
@@ -212,3 +206,39 @@ def get_modules_navigation(modules_list: list, title: str):
     convert_to_pdf(filename)
 
     return filename
+
+
+def get_module_parts(children_list: list, module_info: list, teacher_info: list):
+    filename = f"module_{module_info['name']}_{datetime.now().date().strftime('%d%m%Y')}"
+    doc = docx.Document(f'{current_directory}/templates/module_parts.docx')
+
+    text_title = f"{module_info['name']}" \
+                 f"\n{teacher_info['name']}" \
+                 f"\n{module_info['location']}"
+
+    text_list = ""
+
+    for index, child in enumerate(children_list):
+        text_list += f"{index + 1}. {child['name']} (группа №{child['group_num']})\n"
+
+    paragraph_title = doc.add_paragraph()
+    run = paragraph_title.add_run(text_title)
+    font = run.font
+    font.size = Pt(15)
+    font.name = "Montserrat SemiBold"
+    font.bold = True
+
+    paragraph_body = doc.add_paragraph()
+    run = paragraph_body.add_run(text_list)
+    font = run.font
+    font.size = Pt(13)
+    font.name = "Montserrat Medium"
+    font.bold = False
+
+    doc.save(f"{current_directory}/generated/{filename}.docx")
+    convert_to_pdf(filename)
+
+    return filename
+
+
+

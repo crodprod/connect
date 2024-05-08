@@ -18,9 +18,9 @@ builder_mentors.button(text="Обратная связь 💬", callback_data=Me
 builder_mentors.adjust(2)
 
 builder_children = keyboard.InlineKeyboardBuilder()
-builder_children.button(text="Образовательные модули 💡", callback_data=ChildrenCallbackFactory(action="modules"))
 builder_children.button(text="Радио 📻", callback_data=ChildrenCallbackFactory(action="radio"))
 builder_children.button(text="Обратная связь 💬", callback_data=ChildrenCallbackFactory(action="feedback"))
+builder_children.button(text="Образовательные модули 💡", callback_data=ChildrenCallbackFactory(action="modules"))
 builder_children.adjust(2)
 
 builder_admins = keyboard.InlineKeyboardBuilder()
