@@ -834,9 +834,19 @@ def main(page: ft.Page):
                         target="crod_connect"
                     ),
                     get_reboot_card(
-                        title="Audio",
+                        title="Audio (приложение)",
                         icon=ft.icons.SPATIAL_AUDIO,
-                        target="crod_tasker"
+                        target="crod_audio_app"
+                    ),
+                    get_reboot_card(
+                        title="Audio (веб-сокет)",
+                        icon=ft.icons.SPATIAL_AUDIO,
+                        target="crod_audio_server"
+                    ),
+                    get_reboot_card(
+                        title="Audio (ngrok)",
+                        icon=ft.icons.SPATIAL_AUDIO,
+                        target="crod_ws_ngrok"
                     ),
                     get_reboot_card(
                         title="Таскер",
