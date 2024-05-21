@@ -10,43 +10,43 @@ screens = {
     },
     "children": {
         "title": "Информация о детях",
-        "lead_icon": icons.ARROW_BACK,
+        "lead_icon": icons.MENU,
         "target": "main",
         'scroll': ScrollMode.HIDDEN
 
     },
     "modules": {
         "title": "Учебные модули",
-        "lead_icon": icons.ARROW_BACK,
+        "lead_icon": icons.MENU,
         "target": "main",
         'scroll': ScrollMode.HIDDEN
 
     },
     "mentors": {
         "title": "Состав",
-        "lead_icon": icons.ARROW_BACK,
+        "lead_icon": icons.MENU,
         "target": "main",
         'scroll': ScrollMode.HIDDEN
 
     },
     "docs": {
         "title": "Документы",
-        "lead_icon": icons.ARROW_BACK,
+        "lead_icon": icons.MENU,
         "target": "main",
         'scroll': ScrollMode.HIDDEN
 
     },
     "settings": {
         "title": "Настройки",
-        "lead_icon": icons.ARROW_BACK,
+        "lead_icon": icons.MENU,
         "target": "main",
         'scroll': ScrollMode.HIDDEN
 
     },
     "reboot": {
         "title": "Перезагрузка",
-        "lead_icon": icons.ARROW_BACK,
-        "target": "settings",
+        "lead_icon": icons.MENU,
+        "target": "main",
         'scroll': ScrollMode.HIDDEN
 
     },
@@ -76,20 +76,20 @@ screens = {
     },
     "mentors_info": {
         "title": "Воспитатели",
-        "lead_icon": icons.ARROW_BACK,
+        "lead_icon": icons.MENU,
         "target": "mentors",
         'scroll': ScrollMode.HIDDEN
     },
     "admins_info": {
         "title": "Администраторы",
-        "lead_icon": icons.ARROW_BACK,
+        "lead_icon": icons.MENU,
         "target": "mentors",
         'scroll': ScrollMode.HIDDEN
     },
     "info": {
         "title": "О приложении",
-        "lead_icon": icons.ARROW_BACK,
-        "target": "settings",
+        "lead_icon": icons.MENU,
+        "target": "main",
         'scroll': None
     },
     "showqr": {

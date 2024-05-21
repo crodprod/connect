@@ -1,28 +1,27 @@
+import datetime
 import logging
 import math
 import os
-import platform
 import random
 import re
-import shutil
-import subprocess
 import time
 
 import flet as ft
 import qrcode
-import requests
 import xlrd
 from dotenv import load_dotenv
 from mysql.connector import connect, Error as sql_error
 from urllib.parse import urlparse, parse_qs
 from pypdf import PdfMerger
 
-from requests import post
 from transliterate import translit
 
 import wording.wording
-from flet_elements.tabs import menu_tabs_config
-from flet_elements.screens import screens
+from flet_elements_2.functions import remove_folder_content, get_hello, get_system_list
+from flet_elements_2.modules_locations import locations
+from flet_elements_2.screens import screens
+from flet_elements_2.systemd import reboot_systemd, check_systemd
+from flet_elements_2.telegram import send_telegam_message, send_telegram_document
 
 os.environ['FLET_WEB_APP_PATH'] = '/connect'
 current_directory = os.path.dirname(os.path.abspath(__file__))
@@ -32,18 +31,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s")
 
-
-def remove_folder_content(filepath):
-    for filename in os.listdir(filepath):
-        file_path = os.path.join(filepath, filename)
-        try:
-            if os.path.isfile(file_path) or os.path.islink(file_path):
-                os.unlink(file_path)
-            elif os.path.isdir(file_path):
-                shutil.rmtree(file_path)
-        except Exception as e:
-            pass
-    # print('removed successfully')
+print(os.getenv('ID_GROUP_ERRORS'))
 
 
 def create_db_connection():
@@ -59,53 +47,16 @@ def create_db_connection():
         return connection, cur
 
     except sql_error as e:
-        # elements.global_vars.ERROR_TEXT = str(e)
-        # elements.global_vars.DB_FAIL = True
         logging.error(f"DATABASE CONNECTION: {e}")
+        send_telegam_message(
+            tID=os.getenv('ID_GROUP_ERRORS'),
+            message_text="*Ошибка подключения к БД при работе в Коннекте*"
+                         f"\n\n{e}"
+        )
         return None, None
 
 
-def check_systemd(service_name: str) -> bool():
-    command = ['/usr/bin/systemctl', 'status', f'{service_name}.service']
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    output, error = process.communicate()
-    if process.returncode == 0:
-        text = output.decode()
-        if text[text.find('Active:') + 8:].split()[0] == 'active':
-            return True
-        return False
-    else:
-        return False
-
-
-def reboot_systemd(service_name: str):
-    command = ['/usr/bin/systemctl', 'restart', f'{service_name}.service']
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if process.returncode != 0:
-        return False
-    return True
-
-
-locations = [
-    "Гранат, 1 этаж, аудитория 1",
-    "Гранат, 1 этаж, аудитория 2",
-    "Гранат, 1 этаж, аудитория 3",
-    "Гранат, 1 этаж, аудитория 4",
-    "Гранат, 2 этаж, аудитория 1",
-    "Гранат, 2 этаж, аудитория 2",
-    "Гранат, 2 этаж, аудитория 3",
-    "Гранат, 2 этаж, аудитория 4",
-    "Гранат, 3 этаж, аудитория 1",
-    "Гранат, 3 этаж, аудитория 2",
-    "Гранат, 3 этаж, аудитория 3",
-    "Гранат, 3 этаж, аудитория 4",
-    "Гранат, 3 этаж, студия звукозаписи",
-    "Конференц-зал",
-]
-
-
 def main(page: ft.Page):
-    # Настройки оформления страницы
     page.vertical_alignment = ft.MainAxisAlignment.CENTER,
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
     page.title = "Connect"
@@ -119,29 +70,9 @@ def main(page: ft.Page):
     page.fonts = {
         "Geologica": "fonts/Geologica.ttf",
     }
-    page.padding = 0
+    # page.padding = 0
 
-    # структры для хранения информации
     remaining_children_traffic = []
-
-    def send_telegam_message(tID, message_text):
-        # отправка текстовых сообщений в телеграмм
-
-        url = f'https://api.telegram.org/bot{os.getenv("BOT_TOKEN")}/sendMessage'
-        data = {'chat_id': tID, 'text': message_text, "parse_mode": "Markdown"}
-        post(url=url, data=data)
-
-    def send_telegram_document(tID, filepath: str, description: str):
-        url = f'https://api.telegram.org/bot{os.getenv("BOT_TOKEN")}/sendDocument'
-
-        with open(filepath, 'rb') as file:
-            files = {'document': file}
-            data = {'chat_id': tID, 'caption': description, 'parse_mode': "Markdown"}
-            try:
-                post(url=url, data=data, files=files)
-                return True
-            except requests.exceptions.ConnectTimeout:
-                return False
 
     def make_db_request(sql_query: str, params: tuple = (), get_many: bool = None, put_many: bool = None):
         # обработка sql-запросов
@@ -167,9 +98,18 @@ def main(page: ft.Page):
                 return data
             except Exception as e:
                 logging.error(f'REQUEST ERROR: {e}')
+                send_telegam_message(
+                    tID=os.getenv('ID_GROUP_ERRORS'),
+                    message_text="*Ошибка при выполнение запроса к БД в Коннекте*"
+                                 f"\n\n{e}"
+                )
                 return None
         else:
+            dialog_info_title.value = "Ошибка БД"
+            dialog_info_text.value = "Возникла ошибка при подключении к базе данных, обратитесь к администратору"
+            open_dialog(dialog_info)
             logging.error(f'CONNECTION ERROR')
+            open_dialog(dialog_info)
             return None
 
     def raise_error(location, error_message: str, screen: str):
@@ -177,8 +117,7 @@ def main(page: ft.Page):
             close_dialog(dialog_loading)
             open_sb(error_message, ft.colors.RED)
             if "createdoc" in screen:
-                change_screen("docs")
-
+                change_screen("documents")
 
     def insert_children_info(table_filepath: str):
         loading_text.value = "Добавляем детей"
@@ -207,7 +146,7 @@ def main(page: ft.Page):
                     return
                 row += 1
             close_dialog(dialog_loading)
-            change_screen("children")
+            change_screen("main")
             open_sb("Список детей загружен", ft.colors.GREEN)
             if os.path.exists(f'assets/uploads/{table_filepath}'):
                 os.remove(f'assets/uploads/{table_filepath}')
@@ -217,13 +156,17 @@ def main(page: ft.Page):
             # print('err 1')
 
     def make_reboot(target: str):
-        if platform.system() == "Windows":
+        if bool(os.getenv('DEBUG')):
             response = True
         else:
             response = reboot_systemd(target)
         open_sb("Сервис перезагружен", ft.colors.GREEN)
+        send_telegam_message(
+            tID=os.getenv('ID_GROUP_ERRORS'),
+            message_text=f"*Запрос на перезагрузку сервиса {target}.service отправлен*"
+        )
 
-        change_screen("reboot")
+        change_screen("reboot_menu")
 
     def get_reboot_card(title: str, icon, target: str):
         statuses = {
@@ -236,7 +179,7 @@ def main(page: ft.Page):
                 'text': ft.Text("не доступен")
             },
         }
-        if platform.system() == "Windows":
+        if bool(os.getenv('DEBUG')):
             status_value = False
         else:
             status_value = check_systemd(target)
@@ -265,52 +208,54 @@ def main(page: ft.Page):
 
         return card
 
-    def get_menu_card(title: str, subtitle, icon, target_screen: str = "", type: str = "", height: int = 100):
-        if subtitle is None:
-            sb = None
-        else:
-            sb = ft.Text(subtitle)
-        if type != "":
-            card = ft.Card(
-                ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.ListTile(
-                                title=ft.Text(title),
-                                subtitle=sb,
-                                leading=ft.Icon(icon),
-                                on_click=lambda _: open_confirmation(type)
-                            )
-                        ],
-                        height=height,
-                        alignment=ft.MainAxisAlignment.CENTER,
-                        horizontal_alignment=ft.CrossAxisAlignment.CENTER
-                    ),
-                ),
-                width=600
-            )
-        else:
-            card = ft.Card(
-                ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.ListTile(
-                                title=ft.Text(title),
-                                subtitle=sb,
-                                leading=ft.Icon(icon),
-                                on_click=lambda _: change_screen(target_screen)
-                            )
-                        ],
-                        height=height,
-                        alignment=ft.MainAxisAlignment.CENTER,
-                        horizontal_alignment=ft.CrossAxisAlignment.CENTER
-                    ),
-                ),
-                width=600,
-                # height=100
-            )
+    def appbar_action_selected(e: ft.ControlEvent):
+        data = e.control.data
+        print(data)
 
-        return card
+    def drawer_element_selected(e: ft.ControlEvent):
+        data = e.control.data
+        print(data)
+
+        page.drawer.open = False
+        page.update()
+
+        if data['sec'] == "app":
+            if data['act'] == "exit":
+                password_field.value = ""
+                change_screen("login")
+            elif data['act'] == "home":
+                change_screen("main")
+
+        elif data['sec'] == "children":
+            if data['act'] == "update_table":
+                open_confirmation("upload_children")
+            elif data['act'] == "edit_group_num":
+                change_screen("edit_child_group_num")
+            elif data['act'] == "add_children":
+                change_screen("add_child")
+            elif data['act'] == "":
+                pass
+
+        elif data['sec'] == "modules":
+            change_screen("modules_info")
+
+        elif data['sec'] == "team":
+            if data['act'] == "mentors":
+                change_screen("mentors_info")
+            elif data['act'] == "admins":
+                change_screen("admins_info")
+
+        elif data['sec'] == "documents":
+            if data['act'] == "documents":
+                change_screen("documents")
+
+        elif data['sec'] == "settings":
+            if data['act'] == "edit_stream":
+                open_confirmation("edit_stream")
+            elif data['act'] == "reboot":
+                change_screen("reboot_menu")
+            elif data['act'] == "about":
+                change_screen("app_info")
 
     def create_passphrase(name):
         name = re.sub(r'[^a-zA-Zа-яА-ЯёЁ]', '', translit(''.join(name.split()[:2]), language_code='ru', reversed=True))
@@ -346,7 +291,7 @@ def main(page: ft.Page):
         response = make_db_request(query, (name, module_id, pass_phrase,), put_many=False)
         close_dialog(dialog_loading)
         if response is not None:
-            change_screen("modules")
+            change_screen("modules_info")
             open_sb("Модуль добавлен", ft.colors.GREEN)
         else:
             open_sb("Ошибка БД", ft.colors.RED)
@@ -429,52 +374,525 @@ def main(page: ft.Page):
 
         page.update()
 
-    def change_screen(target: str, params: [] = None):
-        # изменение экрана
+    def open_menu_drawer(e):
+        page.drawer.open = True
+        page.update()
 
+    def generate_document(e: ft.ControlEvent):
+        loading_text.value = "Генерируем документ"
+        open_dialog(dialog_loading)
+
+        doctype = e.control.data['doctype']
+        pdf_filepaths = []
+
+        query = "SELECT telegram_id from admins WHERE password = %s"
+        response = make_db_request(query, (password_field.value,), get_many=False)
+
+        if response['telegram_id'] is None:
+            open_sb("Вы не зарегистрированы в боте", ft.colors.RED)
+        else:
+            caption = "*Генерация документов*\n\n"
+            if doctype == "groups":
+                merger = PdfMerger()
+
+                for group_num in range(1, 6):
+                    dialog_loading.content.controls[0].controls[0].value = f"Генерируем документ (группа {group_num}/{5})"
+                    page.update()
+
+                    query = "SELECT * FROM children WHERE group_num = %s AND status = 'active'"
+                    group_list = make_db_request(query, (group_num,), get_many=True)
+
+                    if group_list is not None:
+                        if group_list:
+                            group_list.sort(key=lambda el: el['name'])
+
+                            group_list_filename = wording.wording.get_grouplist(group_list, group_num)
+                            filepath = f"{current_directory}/wording/generated/{group_list_filename}.pdf"
+
+                            merger.append(filepath)
+                            pdf_filepaths.append(group_list_filename)
+                    else:
+                        raise_error(dialog_loading, "Ошибка получения списка группы", 'createdoc')
+                        return
+
+                merged_filepath = f"{current_directory}/wording/generated/grouplist.pdf"
+                merger.write(merged_filepath)
+                merger.close()
+
+                caption += "Списки групп с информацией о детях"
+                if send_telegram_document(
+                        tID=response['telegram_id'],
+                        filepath=merged_filepath,
+                        description=caption
+                ):
+                    open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
+                    remove_folder_content(f"{current_directory}/wording/generated")
+                else:
+                    open_sb("Ошибка Telegram", ft.colors.RED)
+
+                if os.path.exists(merged_filepath):
+                    os.remove(merged_filepath)
+                for pdf in pdf_filepaths:
+                    if os.path.exists(pdf):
+                        os.remove(pdf)
+
+            elif doctype == "qr":
+                merger = PdfMerger()
+
+                # для групп детей
+                for group_num in range(1, 6):
+                    dialog_loading.content.controls[0].controls[0].value = f"Генерируем документ (группа {group_num}/{5})"
+                    page.update()
+
+                    query = "SELECT * FROM children WHERE group_num = %s AND status = 'active'"
+                    group_list = make_db_request(query, (group_num,), get_many=True)
+
+                    if group_list is not None:
+                        if group_list:
+                            group_list.sort(key=lambda el: el['name'])
+
+                            qr_list_groups_filename = wording.wording.get_qr_list("children", group_list, str(group_num))
+                            filepath = f"{current_directory}/wording/generated/{qr_list_groups_filename}.pdf"
+
+                            merger.append(filepath)
+                            pdf_filepaths.append(qr_list_groups_filename)
+                    else:
+                        raise_error(dialog_loading, "Ошибка получения списка группы", 'createdoc')
+                        return
+                # для остальных
+                for s in ['mentors', 'teachers']:
+                    dialog_loading.content.controls[0].controls[0].value = f"Генерируем документ ({s})"
+                    page.update()
+
+                    query = f"SELECT * FROM {s} WHERE status = 'active'"
+                    group_list = make_db_request(query, get_many=True)
+
+                    if group_list is not None:
+                        if group_list:
+                            qr_list_groups_filename = wording.wording.get_qr_list(s, group_list)
+                            filepath = f"{current_directory}/wording/generated/{qr_list_groups_filename}.pdf"
+                            merger.append(filepath)
+                            pdf_filepaths.append(qr_list_groups_filename)
+                    else:
+                        raise_error(dialog_loading, "Ошибка получения списка группы", 'createdoc')
+                        return
+
+                merged_filepath = f"{current_directory}/wording/generated/qrlist.pdf"
+                merger.write(merged_filepath)
+                merger.close()
+
+                caption += "Таблица QR-кодов для регистрации в Telegram-бота"
+                if send_telegram_document(
+                        tID=response['telegram_id'],
+                        filepath=merged_filepath,
+                        description=caption
+                ):
+                    open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
+                else:
+                    open_sb("Ошибка отправки в Telegram", ft.colors.RED)
+
+                remove_folder_content(f"{current_directory}/wording/qr")
+                remove_folder_content(f"{current_directory}/wording/generated")
+
+                if os.path.exists(merged_filepath):
+                    os.remove(merged_filepath)
+                for pdf in pdf_filepaths:
+                    if os.path.exists(pdf):
+                        os.remove(pdf)
+
+            elif doctype == "modules":
+                query = "SELECT * FROM modules WHERE status = 'active'"
+                modules_list = make_db_request(query, get_many=True)
+
+                if modules_list is not None:
+                    if modules_list:
+                        merger = PdfMerger()
+
+                        for module in modules_list:
+
+                            dialog_loading.content.controls[0].controls[0].value = f"Генерируем документ ({module['name'][:10]}...)"
+                            page.update()
+
+                            query = "SELECT * FROM teachers WHERE module_id = %s and status = 'active'"
+                            teacher_info = make_db_request(query, (module['id'],), get_many=False)
+
+                            if teacher_info is not None:
+                                query = "SELECT * FROM children WHERE id in (SELECT child_id FROM modules_records WHERE module_id = %s) and status = 'active'"
+                                children_list = make_db_request(query, (module['id'],), get_many=True)
+
+                                if children_list is not None:
+                                    if children_list:
+                                        children_list.sort(key=lambda el: el['name'])
+
+                                        filename = wording.wording.get_module_parts(children_list, module, teacher_info)
+                                        filepath = f"{current_directory}/wording/generated/{filename}.pdf"
+
+                                        merger.append(filepath)
+                                        pdf_filepaths.append(filename)
+
+                                else:
+                                    raise_error(dialog_loading, "Ошибка получения списка детей", 'createdoc')
+                                    return
+                            else:
+                                raise_error(dialog_loading, "Ошибка получения информации о преподавателе", 'createdoc')
+                                return
+
+                        if len(pdf_filepaths) > 0:
+                            merged_filepath = f"{current_directory}/wording/generated/modulelist.pdf"
+                            merger.write(merged_filepath)
+                            merger.close()
+
+                            caption += "Состав образовательных модулей"
+
+                            if send_telegram_document(
+                                    tID=response['telegram_id'],
+                                    filepath=merged_filepath,
+                                    description=caption
+                            ):
+                                open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
+                            else:
+                                open_sb("Ошибка отправки в Telegram", ft.colors.RED)
+
+                            remove_folder_content(f"{current_directory}/wording/generated")
+                            if os.path.exists(merged_filepath):
+                                os.remove(merged_filepath)
+                        else:
+                            open_sb("Записи на модули отсутствуют")
+                        for pdf in pdf_filepaths:
+                            if os.path.exists(pdf):
+                                os.remove(pdf)
+                    else:
+                        raise_error(dialog_loading, "Список модулей пуст", 'createdoc')
+                        return
+                else:
+                    raise_error(dialog_loading, "Ошибка получения списка модулей", 'createdoc')
+                    return
+            elif doctype == "navigation":
+                query = "SELECT name from shift_info where id = 0"
+                shift_name = make_db_request(query, get_many=False)
+
+                query = "SELECT * FROM modules WHERE status = 'active'"
+                modules = make_db_request(query, get_many=True)
+
+                if modules is not None:
+                    navigation_filename = wording.wording.get_modules_navigation(modules, shift_name['name'])
+                    filepath = f"{current_directory}/wording/generated/{navigation_filename}.pdf"
+
+                    caption += "Навигация по образовательным модулям"
+
+                    if send_telegram_document(
+                            tID=response['telegram_id'],
+                            filepath=filepath,
+                            description=caption
+                    ):
+                        open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
+                    else:
+                        open_sb("Ошибка Telegram", ft.colors.RED)
+                    if os.path.exists(filepath):
+                        os.remove(filepath)
+                else:
+                    open_sb("Ошибка БД", ft.colors.RED)
+        pdf_filepaths.clear()
+        close_dialog(dialog_loading)
+
+    def get_document_card(title: str, sb: str, icon: ft.icons, doctype: str):
+        card = ft.Card(
+            ft.Container(
+                content=ft.Column(
+                    [
+                        ft.ListTile(
+                            title=ft.Text(title),
+                            subtitle=ft.Text(sb),
+                            leading=ft.Icon(icon),
+                            data={'doctype': doctype},
+                            on_click=generate_document
+                        )
+                    ],
+                    height=100,
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER
+                ),
+            ),
+            width=600,
+            # height=100
+        )
+
+        return card
+
+    def change_screen(target: str):
         page.controls.clear()
-        # page.clean()
-        page.appbar.actions = None
-        page.appbar.leading = None
-        page.appbar.visible = True
+        page.appbar.visible = False
+        page.appbar.actions.clear()
+        page.scroll = screens[target]['scroll_mode']
 
-        if "createdocs" not in target:
-            if screens[target]['lead_icon'] is not None:
+        if screens[target]['appbar']['visible']:
+            page.appbar.visible = True
+            leading_icon = screens[target]['appbar']['leading']['icon']
+            action = screens[target]['appbar']['leading']['action']
+            if action == "change_screen":
                 page.appbar.leading = ft.IconButton(
-                    icon=screens[target]['lead_icon'],
-                    on_click=lambda _: change_screen(screens[target]['target'])
+                    icon=leading_icon,
+                    on_click=lambda _: change_screen(screens[target]['appbar']['leading']['target'])
                 )
-
-            page.appbar.title.value = screens[target]['title']
-            page.scroll = screens[target]['scroll']
+            elif action == "drawer":
+                page.appbar.leading = ft.IconButton(
+                    icon=leading_icon,
+                    on_click=open_menu_drawer
+                )
+            page.appbar.title.value = screens[target]['appbar']['title']
 
         if target == "login":
-            page.appbar.visible = False
             page.add(ft.Container(login_col, expand=True))
 
-        elif target == "info":
-            col = ft.Column(
-                [
-                    ft.Image(
-                        src='icons/loading-animation.png',
-                        height=100,
+        elif target == "main":
+            query = "SELECT * FROM admins WHERE password = %s"
+            admin = make_db_request(query, (password_field.value,), get_many=False)
+
+            view_pb = ft.ProgressBar()
+            fback_pb = ft.ProgressBar()
+            systemd_pb = ft.ProgressBar()
+
+            view_card = ft.Card(
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Row(
+                                [
+                                    ft.Icon(ft.icons.REMOVE_RED_EYE),
+                                    ft.Text("Обзор", size=20, weight=ft.FontWeight.W_400)
+                                ]
+                            ),
+                            view_pb
+                        ]
                     ),
-                    ft.Text("ЦРОД.Коннект (версия abc123)", size=18, weight=ft.FontWeight.W_400),
-                    ft.Text("Приложение, которое автомтизирует процессы во время летних смен и учебных потоков в Центре развития одарённых детей", size=14, text_align=ft.TextAlign.CENTER, width=300),
-                    ft.Container(ft.FilledTonalButton("Связаться с разработчиком", url="https://t.me/l3rtm", icon=ft.icons.MANAGE_ACCOUNTS), margin=ft.margin.only(top=15))
+                    padding=15
+                ),
+                width=600
+            )
+
+            fback_card = ft.Card(
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Row(
+                                [
+                                    ft.Icon(ft.icons.FEED),
+                                    ft.Text("Обратная связь", size=20, weight=ft.FontWeight.W_400),
+                                ]
+                            ),
+                            fback_pb,
+                            ft.Container(
+                                ft.Column(
+                                    [
+                                        ft.ListTile(
+                                            leading=ft.Icon(ft.icons.FILTER_1),
+                                            title=ft.Text("20/27")
+                                        ),
+                                        ft.ListTile(
+                                            leading=ft.Icon(ft.icons.FILTER_2),
+                                            title=ft.Text("20/27")
+                                        ),
+                                        ft.ListTile(
+                                            leading=ft.Icon(ft.icons.FILTER_3),
+                                            title=ft.Text("20/27")
+                                        ),
+                                        ft.ListTile(
+                                            leading=ft.Icon(ft.icons.FILTER_4),
+                                            title=ft.Text("20/27")
+                                        ),
+                                        ft.ListTile(
+                                            leading=ft.Icon(ft.icons.FILTER_5),
+                                            title=ft.Text("20/27")
+                                        ),
+
+                                    ],
+                                    spacing=0.5
+                                ),
+                                margin=ft.margin.only(left=-15)
+                            )
+
+                        ]
+                    ),
+                    padding=15
+                ),
+                width=600
+            )
+
+            systemd_text = ft.Text(size=16)
+            systemd_btn = ft.FilledTonalButton(text="Перезагрузка", icon=ft.icons.RESTART_ALT, on_click=lambda _: change_screen("reboot_menu"), visible=False)
+            systemd_card = ft.Card(
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Row(
+                                [
+                                    ft.Icon(ft.icons.SETTINGS_INPUT_ANTENNA),
+                                    ft.Text("Состояние системы", size=20, weight=ft.FontWeight.W_400)
+                                ]
+                            ),
+                            systemd_pb,
+                            systemd_text,
+                            systemd_btn
+                        ]
+                    ),
+                    padding=15
+                ),
+                width=600
+            )
+
+            col = ft.Column(
+                controls=[
+                    ft.Container(ft.Text(get_hello(admin['name'].split()[1]), size=25, weight=ft.FontWeight.W_600), padding=ft.padding.only(left=10)),
+                    # view_card,
+                    # fback_card,
+                    systemd_card
+                ]
+            )
+
+            page.add(col)
+            page.update()
+
+            systemd_list = get_system_list()
+            time.sleep(2)
+            if systemd_list:
+                systemd_card.color = ft.colors.RED
+                systemd_text.value = "Обнаружены нерабочие сервисы"
+                systemd_btn.visible = True
+            else:
+                systemd_card.color = ft.colors.GREEN
+                systemd_text.value = "Все сервисы работают корректно"
+                systemd_btn.visible = False
+
+            systemd_pb.visible = False
+            fback_pb.visible = False
+            page.update()
+
+        elif target == "modules_info":
+            page.appbar.actions = [
+                ft.PopupMenuButton(
+                    items=[
+                        ft.PopupMenuItem(
+                            text="Новый модуль",
+                            icon=ft.icons.LIBRARY_ADD,
+                            on_click=lambda _: change_screen("create_module")
+                        ),
+                        ft.Divider(thickness=1),
+                        ft.PopupMenuItem(
+                            text="Удалить модули",
+                            icon=ft.icons.DELETE_FOREVER,
+                            on_click=lambda _: open_confirmation("remove_modules")
+                        ),
+                        ft.PopupMenuItem(
+                            text="Удалить записи",
+                            icon=ft.icons.DELETE,
+                            on_click=lambda _: open_confirmation("remove_modules_records")
+                        ),
+                    ]
+                )
+            ]
+            loading_text.value = "Загрузка"
+            open_dialog(dialog_loading)
+
+            query = "SELECT * FROM modules WHERE status = 'active'"
+            admins_list = make_db_request(query, get_many=True)
+            if admins_list is not None:
+                col = ft.Column()
+                for admin in admins_list:
+                    query = "SELECT * FROM teachers WHERE module_id = %s and status = 'active'"
+                    teacher_info = make_db_request(query, (admin['id'],), get_many=False)
+                    if teacher_info is not None:
+                        popup_items = [
+                            ft.FilledButton(text='Изменить локацию', icon=ft.icons.LOCATION_ON, on_click=show_qr, data=f"teachers_{teacher_info['pass_phrase']}"),
+                            ft.FilledButton(text='QR-код', icon=ft.icons.QR_CODE, on_click=show_qr, data=f"teachers_{teacher_info['pass_phrase']}"),
+                            ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=teacher_info['pass_phrase'], on_click=remove_admin),
+                        ]
+
+                        if teacher_info['telegram_id'] is None:
+                            activity_color = ft.colors.AMBER
+                        else:
+                            activity_color = ft.colors.GREEN
+
+                        card = ft.Card(
+                            ft.Container(
+                                content=ft.Column(
+                                    [
+                                        ft.Row(
+                                            [
+                                                ft.Container(
+                                                    ft.ListTile(
+                                                        title=ft.Text('Название', size=14),
+                                                        subtitle=ft.Text(admin['name'], size=16),
+                                                        leading=ft.Icon(ft.icons.ARTICLE)
+                                                    ),
+                                                    expand=True
+                                                ),
+                                                ft.PopupMenuButton(
+                                                    items=popup_items
+                                                )
+                                            ]
+                                        ),
+                                        ft.Container(ft.Divider(thickness=1), ),
+                                        ft.ListTile(
+                                            title=ft.Text('Преподаватель', size=14),
+                                            subtitle=ft.Text(teacher_info['name'], size=16),
+                                            leading=ft.Icon(ft.icons.PERSON)
+                                        ),
+                                        ft.Container(ft.Divider(thickness=1), ),
+                                        ft.ListTile(
+                                            title=ft.Text('Локация', size=14),
+                                            subtitle=ft.Text(admin['location'], size=16),
+                                            leading=ft.Icon(ft.icons.LOCATION_ON)
+                                        ),
+                                        ft.Container(ft.Divider(thickness=1), ),
+                                        ft.ListTile(
+                                            title=ft.Text('Заполненность', size=14),
+                                            subtitle=ft.Text(f"{admin['seats_real']} из {admin['seats_max']}", size=16),
+                                            leading=ft.Icon()
+                                        )
+                                    ],
+                                    spacing=0.5
+                                ),
+                                # padding=ft.padding.only(left=15, right=15)
+                            ),
+                            width=600
+                        )
+                        col.controls.append(card)
+                page.add(col)
+            close_dialog(dialog_loading)
+
+        elif target == "create_mentor":
+            new_mentor_name_field.value = None
+            new_mentor_group_dd.value = None
+            btn_add_mentor.disabled = True
+            col = ft.Column(
+                controls=[
+                    new_mentor_name_field,
+                    new_mentor_group_dd,
+                    ft.Row([btn_add_mentor], alignment=ft.MainAxisAlignment.END)
                 ],
-                alignment=ft.MainAxisAlignment.CENTER,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=1
+                width=600,
+                alignment=ft.MainAxisAlignment.START,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER
             )
             page.add(ft.Container(col, expand=True))
 
-        elif target == "main":
-            page.add(main_menu_col)
+        elif target == "create_admin":
+            new_admin_name_field.value = None
+            col = ft.Column(
+                controls=[
+                    new_admin_name_field,
+                    ft.Row([btn_add_admin], alignment=ft.MainAxisAlignment.END)
+                ],
+                width=600,
+                alignment=ft.MainAxisAlignment.START,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER
+            )
+            page.add(ft.Container(col, expand=True))
+
         elif target == "mentors_info":
             page.appbar.actions = [
                 ft.Container(
-                    ft.IconButton(ft.icons.PERSON_ADD, on_click=lambda _: change_screen("add_mentor")),
+                    ft.IconButton(ft.icons.PERSON_ADD, on_click=lambda _: change_screen("create_mentor")),
                     padding=10
                 )
             ]
@@ -526,10 +944,11 @@ def main(page: ft.Page):
                     )
                 page.add(col)
                 close_dialog(dialog_loading)
+
         elif target == "admins_info":
             page.appbar.actions = [
                 ft.Container(
-                    ft.IconButton(ft.icons.PERSON_ADD, on_click=lambda _: change_screen("add_admin")),
+                    ft.IconButton(ft.icons.PERSON_ADD, on_click=lambda _: change_screen("create_admin")),
                     padding=10
                 )
             ]
@@ -581,235 +1000,49 @@ def main(page: ft.Page):
                     )
                 page.add(col)
             close_dialog(dialog_loading)
-        elif target == "add_module":
-            btn_add_module.disabled = True
-            new_module_name_field.value = None
-            new_module_location_dd.value = None
-            new_module_seats_field.value = None
-            new_module_teacher_name_field.value = None
+
+        elif target == "documents":
             col = ft.Column(
                 controls=[
-                    new_module_name_field,
-                    new_module_location_dd,
-                    new_module_seats_field,
-                    ft.Container(ft.Divider(thickness=1)),
-                    new_module_teacher_name_field,
-                    ft.Row([btn_add_module], alignment=ft.MainAxisAlignment.END)
-                ],
-                width=600,
-                alignment=ft.MainAxisAlignment.START,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER
-            )
-            page.add(ft.Container(col, expand=True))
-
-        elif target == "add_mentor":
-            new_mentor_name_field.value = None
-            new_mentor_group_dd.value = None
-            btn_add_mentor.disabled = True
-            col = ft.Column(
-                controls=[
-                    new_mentor_name_field,
-                    new_mentor_group_dd,
-                    ft.Row([btn_add_mentor], alignment=ft.MainAxisAlignment.END)
-                ],
-                width=600,
-                alignment=ft.MainAxisAlignment.START,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER
-            )
-            page.add(ft.Container(col, expand=True))
-
-        elif target == "add_admin":
-            new_admin_name_field.value = None
-            col = ft.Column(
-                controls=[
-                    new_admin_name_field,
-                    ft.Row([btn_add_admin], alignment=ft.MainAxisAlignment.END)
-                ],
-                width=600,
-                alignment=ft.MainAxisAlignment.START,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER
-            )
-            page.add(ft.Container(col, expand=True))
-
-
-        elif target == "children":
-            col = ft.Column(
-                controls=[
-                    get_menu_card(
-                        title="Обновление списка",
-                        subtitle="Загрузка таблицы с информацией о детях",
-                        icon=ft.icons.UPLOAD_FILE,
-                        type="upload_children"
-                    ),
-                    get_menu_card(
-                        title="Изменить группу",
-                        subtitle="Изменение номера группы ребёнка",
-                        icon=ft.icons.EDIT_DOCUMENT,
-                        type="upload_children"
-                    ),
-                    get_menu_card(
-                        title="Добавить ребёнка",
-                        subtitle="Единичное добавление нового ребёнка",
-                        icon=ft.icons.PERSON_ADD,
-                        type="upload_children"
-                    )
-                ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER
-            )
-            page.add(col)
-
-        elif target == "docs":
-            col = ft.Column(
-                controls=[
-                    get_menu_card(
+                    get_document_card(
                         title="Списки групп",
-                        subtitle="Таблицы с особенностями детей и контактами родителей",
+                        sb="Таблицы с особенностями детей и контактами родителей",
                         icon=ft.icons.VIEW_LIST,
-                        target_screen="createdocs_groups"
+                        doctype='groups'
                     ),
-                    get_menu_card(
+                    get_document_card(
                         title="QR-коды",
-                        subtitle="Таблицы с QR-кодами для групп, воспитателей и преподавателей",
+                        sb="Таблицы с QR-кодами для групп, воспитателей и преподавателей",
                         icon=ft.icons.QR_CODE_2,
-                        target_screen="createdocs_qr"
+                        doctype='qr'
                     ),
-                    get_menu_card(
+                    get_document_card(
                         title="Списки модулей",
-                        subtitle="Распределение детей по учебным модулям",
+                        sb="Распределение детей по учебным модулям",
                         icon=ft.icons.GROUPS,
-                        target_screen="createdocs_modules"
+                        doctype='modules'
                     ),
-                    get_menu_card(
+                    get_document_card(
                         title="Навигация",
-                        subtitle="Распределение модулей по аудиториям",
+                        sb="Распределение модулей по аудиториям",
                         icon=ft.icons.LOCATION_ON,
-                        target_screen="createdocs_navigation"
+                        doctype='navigation'
                     )
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER
             )
             page.add(col)
 
-        elif target == "modules":
-            page.appbar.actions = [
-                ft.PopupMenuButton(
-                    items=[
-                        ft.PopupMenuItem(text="Новый модуль", icon=ft.icons.LIBRARY_ADD, on_click=lambda _: change_screen("add_module")),
-                        ft.Divider(thickness=1),
-                        ft.PopupMenuItem(text="Удалить модули", icon=ft.icons.DELETE_FOREVER, on_click=lambda _: open_confirmation("remove_modules")),
-                        ft.PopupMenuItem(text="Удалить записи", icon=ft.icons.DELETE, on_click=lambda _: open_confirmation("remove_modules_records")),
-                    ]
-                )
-            ]
-            loading_text.value = "Загрузка"
-            open_dialog(dialog_loading)
-
-            query = "SELECT * FROM modules WHERE status = 'active'"
-            admins_list = make_db_request(query, get_many=True)
-            if admins_list is not None:
-                col = ft.Column()
-                for admin in admins_list:
-                    query = "SELECT * FROM teachers WHERE module_id = %s and status = 'active'"
-                    teacher_info = make_db_request(query, (admin['id'],), get_many=False)
-                    if teacher_info is not None:
-                        popup_items = [
-                            ft.FilledButton(text='Изменить локацию', icon=ft.icons.LOCATION_ON, on_click=show_qr, data=f"teachers_{teacher_info['pass_phrase']}"),
-                            ft.FilledButton(text='QR-код', icon=ft.icons.QR_CODE, on_click=show_qr, data=f"teachers_{teacher_info['pass_phrase']}"),
-                            ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=teacher_info['pass_phrase'], on_click=remove_admin),
-                        ]
-
-                        if teacher_info['telegram_id'] is None:
-                            activity_color = ft.colors.AMBER
-                        else:
-                            activity_color = ft.colors.GREEN
-
-                        col.controls.append(
-                            ft.Card(
-                                ft.Container(
-                                    content=ft.Column(
-                                        [
-                                            ft.Row(
-                                                [
-                                                    ft.Container(
-                                                        ft.ListTile(
-                                                            title=ft.Text(admin['name']),
-                                                            subtitle=ft.Text(teacher_info['name']),
-                                                            leading=ft.Icon(ft.icons.ACCOUNT_CIRCLE, color=activity_color)
-                                                        ),
-                                                        expand=True
-                                                    ),
-                                                    ft.PopupMenuButton(
-                                                        items=popup_items
-                                                    )
-                                                ]
-                                            ),
-                                            ft.Container(
-                                                ft.ListTile(
-                                                    title=ft.Text(admin['location']),
-                                                    subtitle=ft.Text(f"Занято {admin['seats_real']} из {admin['seats_max']}"),
-                                                    leading=ft.Icon(ft.icons.INFO)
-                                                ),
-                                                margin=ft.margin.only(top=-25)
-                                            )
-                                        ]
-                                    ),
-                                    padding=ft.padding.only(right=10)
-                                ),
-                                width=600
-                            )
-                        )
-                page.add(col)
-            close_dialog(dialog_loading)
-
-        elif target == "mentors":
-            col = ft.Column(
-                controls=[
-                    get_menu_card(
-                        title="Воспитатели",
-                        subtitle="Управление воспитателями",
-                        icon=ft.icons.EMOJI_PEOPLE,
-                        target_screen="mentors_info"
-                    ),
-                    get_menu_card(
-                        title="Администраторы",
-                        subtitle="Управление администраторами",
-                        icon=ft.icons.MANAGE_ACCOUNTS,
-                        target_screen="admins_info"
-                    )
-                ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER
-            )
-            page.add(col)
-
-        elif target == "settings":
-            col = ft.Column(
-                controls=[
-                    get_menu_card(
-                        title="Параметры смены",
-                        subtitle="Изменение параметров текущей смены или потока",
-                        icon=ft.icons.MANAGE_ACCOUNTS,
-                        type="edit_stream"
-                    ),
-                    get_menu_card(
-                        title="Перезагрузка",
-                        subtitle="Перезагрузка сервисов ЦРОДа",
-                        icon=ft.icons.RESTART_ALT,
-                        target_screen="reboot"
-                    ),
-                    get_menu_card(
-                        title="О приложении",
-                        subtitle="Техническая информация",
-                        icon=ft.icons.INFO,
-                        target_screen="info"
-                    )
-                ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER
-            )
-            page.add(col)
-        elif target == "reboot":
+        elif target == "reboot_menu":
             page.appbar.actions = [
                 ft.Container(
-                    ft.IconButton(ft.icons.RESTART_ALT, on_click=lambda _: change_screen("reboot")),
+                    ft.PopupMenuButton(
+                        items=[
+                            ft.PopupMenuItem(text="Обновить", icon=ft.icons.RESTART_ALT, on_click=lambda _: change_screen("reboot_menu")),
+                            ft.PopupMenuItem(text="Перезагрузка сервера", icon=ft.icons.VIEW_COMPACT_ALT, on_click=lambda _: open_confirmation("reboot_server")),
+                        ]
+                    ),
+                    # ft.IconButton(ft.icons.RESTART_ALT, on_click=lambda _: change_screen("reboot_menu")),
                     padding=10
                 )
             ]
@@ -852,6 +1085,11 @@ def main(page: ft.Page):
                         title="Таскер",
                         icon=ft.icons.ADD_TASK,
                         target="crod_tasker"
+                    ),
+                    get_reboot_card(
+                        title="Стартовая страница",
+                        icon=ft.icons.ADD_TASK,
+                        target="crod_mainpage"
                     )
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER
@@ -859,238 +1097,34 @@ def main(page: ft.Page):
             page.add(col)
             close_dialog(dialog_loading)
 
-        elif "createdocs" in target:
-            loading_text.value = "Генерируем документ"
-            open_dialog(dialog_loading)
-
-            doctype = target.split("_")[1]
-            pdf_filepaths = []
-
-            query = "SELECT telegram_id from admins WHERE password = %s"
-            response = make_db_request(query, (password_field.value,), get_many=False)
-
-            if response['telegram_id'] is None:
-                open_sb("Вы не зарегистрированы в боте", ft.colors.RED)
-            else:
-                caption = "*Генерация документов*\n\n"
-                if doctype == "groups":
-                    merger = PdfMerger()
-
-                    for group_num in range(1, 6):
-                        dialog_loading.content.controls[0].controls[0].value = f"Генерируем документ (группа {group_num}/{5})"
-                        page.update()
-
-                        query = "SELECT * FROM children WHERE group_num = %s AND status = 'active'"
-                        group_list = make_db_request(query, (group_num,), get_many=True)
-
-                        if group_list is not None:
-                            if group_list:
-                                group_list.sort(key=lambda el: el['name'])
-
-                                group_list_filename = wording.wording.get_grouplist(group_list, group_num)
-                                filepath = f"{current_directory}/wording/generated/{group_list_filename}.pdf"
-
-                                merger.append(filepath)
-                                pdf_filepaths.append(group_list_filename)
-                        else:
-                            raise_error(dialog_loading, "Ошибка получения списка группы", 'createdoc')
-                            return
-
-                    merged_filepath = f"{current_directory}/wording/generated/grouplist.pdf"
-                    merger.write(merged_filepath)
-                    merger.close()
-
-                    caption += "Списки групп с информацией о детях"
-                    if send_telegram_document(
-                            tID=response['telegram_id'],
-                            filepath=merged_filepath,
-                            description=caption
-                    ):
-                        open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
-                        remove_folder_content(f"{current_directory}/wording/generated")
-                    else:
-                        open_sb("Ошибка Telegram", ft.colors.RED)
-
-                    if os.path.exists(merged_filepath):
-                        os.remove(merged_filepath)
-                    for pdf in pdf_filepaths:
-                        if os.path.exists(pdf):
-                            os.remove(pdf)
-
-                elif doctype == "qr":
-                    merger = PdfMerger()
-
-                    # для групп детей
-                    for group_num in range(1, 6):
-                        dialog_loading.content.controls[0].controls[0].value = f"Генерируем документ (группа {group_num}/{5})"
-                        page.update()
-
-                        query = "SELECT * FROM children WHERE group_num = %s AND status = 'active'"
-                        group_list = make_db_request(query, (group_num,), get_many=True)
-
-                        if group_list is not None:
-                            if group_list:
-                                group_list.sort(key=lambda el: el['name'])
-
-                                qr_list_groups_filename = wording.wording.get_qr_list("children", group_list, str(group_num))
-                                filepath = f"{current_directory}/wording/generated/{qr_list_groups_filename}.pdf"
-
-                                merger.append(filepath)
-                                pdf_filepaths.append(qr_list_groups_filename)
-                        else:
-                            raise_error(dialog_loading, "Ошибка получения списка группы", 'createdoc')
-                            return
-                    # для остальных
-                    for s in ['mentors', 'teachers']:
-                        dialog_loading.content.controls[0].controls[0].value = f"Генерируем документ ({s})"
-                        page.update()
-
-                        query = f"SELECT * FROM {s} WHERE status = 'active'"
-                        group_list = make_db_request(query, get_many=True)
-
-                        if group_list is not None:
-                            if group_list:
-                                qr_list_groups_filename = wording.wording.get_qr_list(s, group_list)
-                                filepath = f"{current_directory}/wording/generated/{qr_list_groups_filename}.pdf"
-                                merger.append(filepath)
-                                pdf_filepaths.append(qr_list_groups_filename)
-                        else:
-                            raise_error(dialog_loading, "Ошибка получения списка группы", 'createdoc')
-                            return
-
-                    merged_filepath = f"{current_directory}/wording/generated/qrlist.pdf"
-                    merger.write(merged_filepath)
-                    merger.close()
-
-                    caption += "Таблица QR-кодов для регистрации в Telegram-бота"
-                    if send_telegram_document(
-                            tID=response['telegram_id'],
-                            filepath=merged_filepath,
-                            description=caption
-                    ):
-                        open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
-                    else:
-                        open_sb("Ошибка отправки в Telegram", ft.colors.RED)
-
-                    remove_folder_content(f"{current_directory}/wording/qr")
-                    remove_folder_content(f"{current_directory}/wording/generated")
-
-                    if os.path.exists(merged_filepath):
-                        os.remove(merged_filepath)
-                    for pdf in pdf_filepaths:
-                        if os.path.exists(pdf):
-                            os.remove(pdf)
-
-                elif doctype == "modules":
-                    query = "SELECT * FROM modules WHERE status = 'active'"
-                    modules_list = make_db_request(query, get_many=True)
-
-                    if modules_list is not None:
-                        if modules_list:
-                            merger = PdfMerger()
-
-                            for module in modules_list:
-
-                                dialog_loading.content.controls[0].controls[0].value = f"Генерируем документ ({module['name'][:10]}...)"
-                                page.update()
-
-                                query = "SELECT * FROM teachers WHERE module_id = %s and status = 'active'"
-                                teacher_info = make_db_request(query, (module['id'],), get_many=False)
-
-                                if teacher_info is not None:
-                                    query = "SELECT * FROM children WHERE id in (SELECT child_id FROM modules_records WHERE module_id = %s) and status = 'active'"
-                                    children_list = make_db_request(query, (module['id'],), get_many=True)
-
-                                    if children_list is not None:
-                                        if children_list:
-                                            children_list.sort(key=lambda el: el['name'])
-
-                                            filename = wording.wording.get_module_parts(children_list, module, teacher_info)
-                                            filepath = f"{current_directory}/wording/generated/{filename}.pdf"
-
-                                            merger.append(filepath)
-                                            pdf_filepaths.append(filename)
-
-                                    else:
-                                        raise_error(dialog_loading, "Ошибка получения списка детей", 'createdoc')
-                                        return
-                                else:
-                                    raise_error(dialog_loading, "Ошибка получения информации о преподавателе", 'createdoc')
-                                    return
-
-                            if len(pdf_filepaths) > 0:
-                                merged_filepath = f"{current_directory}/wording/generated/modulelist.pdf"
-                                merger.write(merged_filepath)
-                                merger.close()
-
-                                caption += "Состав образовательных модулей"
-
-                                if send_telegram_document(
-                                        tID=response['telegram_id'],
-                                        filepath=merged_filepath,
-                                        description=caption
-                                ):
-                                    open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
-                                else:
-                                    open_sb("Ошибка отправки в Telegram", ft.colors.RED)
-
-                                remove_folder_content(f"{current_directory}/wording/generated")
-                                if os.path.exists(merged_filepath):
-                                    os.remove(merged_filepath)
-                            else:
-                                open_sb("Записи на модули отсутствуют")
-                            for pdf in pdf_filepaths:
-                                if os.path.exists(pdf):
-                                    os.remove(pdf)
-                        else:
-                            raise_error(dialog_loading, "Список модулей пуст", 'createdoc')
-                            return
-                    else:
-                        raise_error(dialog_loading, "Ошибка получения списка модулей", 'createdoc')
-                        return
-                elif doctype == "navigation":
-                    query = "SELECT name from shift_info where id = 0"
-                    shift_name = make_db_request(query, get_many=False)
-
-                    query = "SELECT * FROM modules WHERE status = 'active'"
-                    modules = make_db_request(query, get_many=True)
-
-                    if modules is not None:
-                        navigation_filename = wording.wording.get_modules_navigation(modules, shift_name['name'])
-                        filepath = f"{current_directory}/wording/generated/{navigation_filename}.pdf"
-
-                        caption += "Навигация по образовательным модулям"
-
-                        if send_telegram_document(
-                                tID=response['telegram_id'],
-                                filepath=filepath,
-                                description=caption
-                        ):
-                            open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
-                        else:
-                            open_sb("Ошибка Telegram", ft.colors.RED)
-                        if os.path.exists(filepath):
-                            os.remove(filepath)
-                    else:
-                        open_sb("Ошибка БД", ft.colors.RED)
-            pdf_filepaths.clear()
-            close_dialog(dialog_loading)
-            change_screen("docs")
-
-        # экраны из бота
-        elif target == "showqr":
-            # page.navigation_bar.visible = False
-            get_showqr(
-                target=params['target'][0],
-                value=params['value'][0]
+        elif target == "app_info":
+            col = ft.Column(
+                controls=[
+                    ft.Card(
+                        ft.Container(
+                            ft.Column(
+                                [
+                                    ft.Image(
+                                        src='icons/loading-animation.png',
+                                        height=100,
+                                    ),
+                                    ft.Text("ЦРОД.Коннект (v1.0)", size=20, weight=ft.FontWeight.W_400),
+                                    ft.Text("Приложение для автоматизации процессов во время летних смен и учебных потоков в Центре развития одарённых детей", size=16, text_align=ft.TextAlign.START,
+                                            width=500),
+                                    ft.Container(ft.Divider(thickness=1), width=200),
+                                    ft.FilledTonalButton("Связаться с разработчиком", url="https://t.me/lrrrtm", icon=ft.icons.MANAGE_ACCOUNTS)
+                                ],
+                                alignment=ft.MainAxisAlignment.CENTER,
+                                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                                spacing=1
+                            ),
+                            padding=15
+                        ),
+                        width=600
+                    )
+                ]
             )
-
-        elif target == "modulecheck":
-            # page.navigation_bar.visible = False
-            get_modulecheck(
-                mentor_id=params['mentor_id'][0],
-                module_id=params['module_id'][0]
-            )
+            page.add(ft.Container(col, expand=True))
 
         page.update()
 
@@ -1222,7 +1256,7 @@ def main(page: ft.Page):
                 else:
                     open_sb("Ошибка БД", ft.colors.RED)
 
-                change_screen("modules")
+                change_screen("modules_info")
                 close_dialog(dialog_loading)
 
             elif action == "remove_modules_records":
@@ -1238,8 +1272,18 @@ def main(page: ft.Page):
                 else:
                     open_sb("Ошибка БД", ft.colors.RED)
 
-                change_screen("modules")
+                change_screen("modules_info")
                 close_dialog(dialog_loading)
+
+            elif action == "reboot_server":
+                dialog_info_title.value = "Перезагрузка сервера"
+                dialog_info_text.value = "Сервер будет перезагружен через 5 секунд. Если перезагрузка будет удачной, вам придёт сообщение в Telegram"
+                open_dialog(dialog_info)
+
+                time.sleep(10)
+                close_dialog(dialog_info)
+                loading_text.value = "Перезагрузка"
+                open_dialog(dialog_loading)
 
         else:
             open_sb("Неверный код", ft.colors.RED)
@@ -1250,9 +1294,6 @@ def main(page: ft.Page):
             'upload_children': {
                 'title': "Загрузка таблицы"
             },
-            'edit_modules_count': {
-                'title': "Количество модулей"
-            },
             'edit_stream': {
                 'title': "Параметры смены"
             },
@@ -1261,6 +1302,9 @@ def main(page: ft.Page):
             },
             'remove_modules_records': {
                 'title': "Удаление записей на модули"
+            },
+            'reboot_server': {
+                'title': "Перезагрузка сервера"
             }
         }
 
@@ -1329,16 +1373,17 @@ def main(page: ft.Page):
     )
 
     def login():
+        loading_text.value = "Загрузка"
+        open_dialog(dialog_loading)
         query = "SELECT * FROM admins WHERE password = %s and status = 'active'"
         admin_info = make_db_request(query, (password_field.value,), get_many=True)
         if admin_info is not None:
             if admin_info:
-                name = " ".join(admin_info[0]['name'].split(" ")[1:])
                 password_field.data = admin_info[0]
-                open_sb(f"Здравствуйте, {name}")
                 change_screen("main")
             else:
                 open_sb("Ошибка доступа", ft.colors.RED)
+        close_dialog(dialog_loading)
         page.update()
 
     # элементы интерфейса
@@ -1351,46 +1396,46 @@ def main(page: ft.Page):
 
     module_traffic_col = ft.Column(width=600)
 
-    main_menu_col = ft.Column(
-        controls=[
-            get_menu_card(
-                title=menu_tabs_config[0]['title'],
-                subtitle=None,
-                icon=menu_tabs_config[0]['icon'],
-                target_screen="children",
-                height=80
-            ),
-            get_menu_card(
-                title=menu_tabs_config[1]['title'],
-                subtitle=None,
-                icon=menu_tabs_config[1]['icon'],
-                target_screen="modules",
-                height=80
-            ),
-            get_menu_card(
-                title=menu_tabs_config[2]['title'],
-                subtitle=None,
-                icon=menu_tabs_config[2]['icon'],
-                target_screen="mentors",
-                height=80
-            ),
-            get_menu_card(
-                title=menu_tabs_config[3]['title'],
-                subtitle=None,
-                icon=menu_tabs_config[3]['icon'],
-                target_screen="docs",
-                height=80
-            ),
-            get_menu_card(
-                title=menu_tabs_config[4]['title'],
-                subtitle=None,
-                icon=menu_tabs_config[4]['icon'],
-                target_screen="settings",
-                height=80
-            )
-        ],
-        horizontal_alignment=ft.CrossAxisAlignment.START,
-    )
+    # main_menu_col = ft.Column(
+    #     controls=[
+    #         get_menu_card(
+    #             title=menu_tabs_config[0]['title'],
+    #             subtitle=None,
+    #             icon=menu_tabs_config[0]['icon'],
+    #             target_screen="children",
+    #             height=80
+    #         ),
+    #         get_menu_card(
+    #             title=menu_tabs_config[1]['title'],
+    #             subtitle=None,
+    #             icon=menu_tabs_config[1]['icon'],
+    #             target_screen="modules",
+    #             height=80
+    #         ),
+    #         get_menu_card(
+    #             title=menu_tabs_config[2]['title'],
+    #             subtitle=None,
+    #             icon=menu_tabs_config[2]['icon'],
+    #             target_screen="mentors",
+    #             height=80
+    #         ),
+    #         get_menu_card(
+    #             title=menu_tabs_config[3]['title'],
+    #             subtitle=None,
+    #             icon=menu_tabs_config[3]['icon'],
+    #             target_screen="docs",
+    #             height=80
+    #         ),
+    #         get_menu_card(
+    #             title=menu_tabs_config[4]['title'],
+    #             subtitle=None,
+    #             icon=menu_tabs_config[4]['icon'],
+    #             target_screen="settings",
+    #             height=80
+    #         )
+    #     ],
+    #     horizontal_alignment=ft.CrossAxisAlignment.START,
+    # )
 
     settings_col = ft.Column(
         controls=[
@@ -1521,6 +1566,11 @@ def main(page: ft.Page):
         on_submit=lambda _: login(),
         password=True
     )
+
+    if bool(os.getenv('DEBUG')):
+        pass
+        # password_field.value = "lrrrtm"
+
     button_login = ft.ElevatedButton("Войти", width=250, on_click=lambda _: login(),
                                      disabled=False, height=50,
                                      icon=ft.icons.KEYBOARD_ARROW_RIGHT_ROUNDED)
@@ -1539,14 +1589,17 @@ def main(page: ft.Page):
     )
 
     # Диалоги
+    dialog_info_text = ft.Text(size=18, width=600)
+    dialog_info_title = ft.Text(size=20, weight=ft.FontWeight.W_400)
     dialog_info = ft.AlertDialog(
         modal=True,
         title=ft.Row(
             [
-                ft.Container(ft.Text(size=20, weight=ft.FontWeight.W_400), expand=True),
+                ft.Container(dialog_info_title, expand=True),
                 ft.IconButton(ft.icons.CLOSE_ROUNDED, on_click=lambda _: close_dialog(dialog_info))
             ]
-        )
+        ),
+        content=dialog_info_text
     )
 
     dialog_qr = ft.AlertDialog(
@@ -1649,8 +1702,8 @@ def main(page: ft.Page):
 
         else:
             page.controls.clear()
-            dialog_info.title.controls[0].content.value = "Посещаемость"
-            dialog_info.content = ft.Text(f"Все дети на месте, спасибо! Можно возвращаться в телеграмм", size=18, width=600)
+            dialog_info_title.value = "Посещаемость"
+            dialog_info_text.value = "Все дети на месте, спасибо! Можно возвращаться в Telegram"
             open_dialog(dialog_info)
 
             message_text = f"*Посещаемость*" \
@@ -1734,8 +1787,8 @@ def main(page: ft.Page):
                 ]
                 page.add(qr_screen_col)
             else:
-                dialog_info.title.controls[0].content.value = "QR-коды"
-                dialog_info.content = ft.Text(f"В группе «{group_title}» все пользователи зарегистрированы", size=18, width=600)
+                dialog_info_title.value = "QR-коды"
+                dialog_info_text.value = f"В группе «{group_title}» все пользователи зарегистрированы"
                 open_dialog(dialog_info)
 
     def get_modulecheck(mentor_id: str, module_id: str):
@@ -1786,7 +1839,153 @@ def main(page: ft.Page):
         else:
             pass
 
-    if platform.system() == "Windows":
+    page.drawer = ft.NavigationDrawer(
+        controls=[
+            ft.Container(height=12),
+            ft.ListTile(
+                title=ft.Text("Коннект", weight=ft.FontWeight.W_400, size=20),
+                leading=ft.Image(src='icons/loading-animation.png', height=30)
+            ),
+            ft.Divider(thickness=1),
+            ft.ListTile(
+                title=ft.Text("Главная"),
+                leading=ft.Icon(ft.icons.HOME),
+                data={'sec': "app", 'act': "home"},
+                on_click=drawer_element_selected),
+            ft.ExpansionTile(
+                title=ft.Text("Информация о детях"),
+                leading=ft.Icon(ft.icons.CHILD_CARE),
+                expanded_cross_axis_alignment=ft.CrossAxisAlignment.START,
+                controls=[
+                    ft.ListTile(
+                        title=ft.Text("Обновление списка"),
+                        subtitle=ft.Text("Загрузка таблицы с информацией о детях"),
+                        leading=ft.Icon(ft.icons.UPLOAD_FILE),
+                        data={'sec': "children", 'act': "update_table"},
+                        on_click=drawer_element_selected),
+                    ft.ListTile(
+                        title=ft.Text("Изменение группы"),
+                        subtitle=ft.Text("Изменение номера группы ребёнка"),
+                        leading=ft.Icon(ft.icons.EDIT_DOCUMENT),
+                        data={'sec': "children", 'act': "edit_group_num"},
+                        on_click=drawer_element_selected),
+                    ft.ListTile(
+                        title=ft.Text("Добавить ребёнка"),
+                        subtitle=ft.Text("Единичное добавление нового ребёнка"),
+                        leading=ft.Icon(ft.icons.PERSON_ADD),
+                        data={'sec': "children", 'act': "add_children"},
+                        on_click=drawer_element_selected),
+                ],
+            ),
+            ft.ListTile(
+                title=ft.Text("Учебные модули"),
+                # subtitle=ft.Text("Загрузка таблицы с информацией о детях"),
+                leading=ft.Icon(ft.icons.SCHOOL),
+                data={'sec': "modules", 'act': "modules"},
+                on_click=drawer_element_selected),
+            ft.ExpansionTile(
+                title=ft.Text("Состав"),
+                leading=ft.Icon(ft.icons.PEOPLE_ALT),
+
+                controls=[
+                    ft.ListTile(
+                        title=ft.Text("Воспитатели"),
+                        subtitle=ft.Text("Управление воспитателями"),
+                        leading=ft.Icon(ft.icons.EMOJI_PEOPLE),
+                        data={'sec': "team", 'act': "mentors"},
+                        on_click=drawer_element_selected
+                    ),
+                    ft.ListTile(
+                        title=ft.Text("Администраторы"),
+                        subtitle=ft.Text("Управление администраторами"),
+                        leading=ft.Icon(ft.icons.MANAGE_ACCOUNTS),
+                        data={'sec': "team", 'act': "admins"},
+                        on_click=drawer_element_selected
+                    ),
+                ],
+            ),
+            ft.ListTile(
+                title=ft.Text("Документы"),
+                # subtitle=ft.Text("Загрузка таблицы с информацией о детях"),
+                leading=ft.Icon(ft.icons.DOCUMENT_SCANNER),
+                data={'sec': "documents", 'act': "documents"},
+                on_click=drawer_element_selected),
+            # ft.ExpansionTile(
+            #     title=ft.Text("Документы"),
+            #     # subtitle=ft.Text("Trailing expansion arrow icon"),
+            #     leading=ft.Icon(ft.icons.TEXT_SNIPPET),
+            #
+            #     controls=[
+            #         ft.ListTile(
+            #             title=ft.Text("Списки групп"),
+            #             subtitle=ft.Text("Таблицы с особенностями детей и контактами родителей"),
+            #             leading=ft.Icon(ft.icons.VIEW_LIST),
+            #             data={'sec': "documents", 'act': "groups_lists"},
+            #             on_click=drawer_element_selected
+            #         ),
+            #         ft.ListTile(
+            #             title=ft.Text("QR-коды"),
+            #             subtitle=ft.Text("Таблицы с QR-кодами для групп, воспитателей и преподавателей"),
+            #             leading=ft.Icon(ft.icons.QR_CODE_2),
+            #             data={'sec': "documents", 'act': "qr_codes_lists"},
+            #             on_click=drawer_element_selected
+            #         ),
+            #         ft.ListTile(
+            #             title=ft.Text("Списки модулей"),
+            #             subtitle=ft.Text("Распределение детей по учебным модулям"),
+            #             leading=ft.Icon(ft.icons.GROUPS),
+            #             data={'sec': "documents", 'act': "modules_lists"},
+            #             on_click=drawer_element_selected
+            #         ),
+            #         ft.ListTile(
+            #             title=ft.Text("Навигация"),
+            #             subtitle=ft.Text("Распределение модулей по аудиториям"),
+            #             leading=ft.Icon(ft.icons.LOCATION_ON),
+            #             data={'sec': "documents", 'act': "module_navigation"},
+            #             on_click=drawer_element_selected
+            #         ),
+            #     ],
+            # ),
+            ft.ExpansionTile(
+                title=ft.Text("Настройки"),
+                # subtitle=ft.Text("Trailing expansion arrow icon"),
+                leading=ft.Icon(ft.icons.SETTINGS),
+
+                controls=[
+                    ft.ListTile(
+                        title=ft.Text("Параметры смены"),
+                        subtitle=ft.Text("Изменение параметров текущей смены или потока"),
+                        leading=ft.Icon(ft.icons.MANAGE_ACCOUNTS),
+                        data={'sec': "settings", 'act': "edit_stream"},
+                        on_click=drawer_element_selected
+                    ),
+                    ft.ListTile(
+                        title=ft.Text("Состояние системы"),
+                        subtitle=ft.Text("Перезагрузка сервисов"),
+                        leading=ft.Icon(ft.icons.RESTART_ALT),
+                        data={'sec': "settings", 'act': "reboot"},
+                        on_click=drawer_element_selected
+                    ),
+                    ft.ListTile(
+                        title=ft.Text("О приложении"),
+                        # subtitle=ft.Text(""),
+                        leading=ft.Icon(ft.icons.INFO),
+                        data={'sec': "settings", 'act': "about"},
+                        on_click=drawer_element_selected
+                    ),
+                ],
+            ),
+            ft.Divider(thickness=1),
+            ft.ListTile(
+                title=ft.Text("Выйти"),
+                leading=ft.Icon(ft.icons.LOGOUT, rotate=math.pi),
+                data={'sec': "app", 'act': "exit"},
+                on_click=drawer_element_selected),
+
+        ],
+    )
+
+    if bool(os.getenv('DEBUG')):
         page.window_width = 377
         page.window_height = 768
         # page.route = "/modulecheck?mentor_id=1&module_id=1"
@@ -1796,7 +1995,8 @@ def main(page: ft.Page):
     current_url = urlparse(page.route)
     url_params = parse_qs(current_url.query)
     if current_url.path == '/':
-        if platform.system() == "Windows":
+        if bool(os.getenv('DEBUG')):
+            # login()
             change_screen("login")
         else:
             change_screen("login")
@@ -1814,7 +2014,7 @@ def main(page: ft.Page):
 
 
 if __name__ == "__main__":
-    if platform.system() == "Windows":
+    if bool(os.getenv('DEBUG')):
         ft.app(
             target=main,
             assets_dir='assets',
