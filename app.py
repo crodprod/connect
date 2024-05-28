@@ -1573,8 +1573,7 @@ def main(page: ft.Page):
     )
 
     if bool(os.getenv('DEBUG')):
-        pass
-        # password_field.value = "lrrrtm"
+        password_field.value = "lrrrtm"
 
     button_login = ft.ElevatedButton("Войти", width=250, on_click=lambda _: login(),
                                      disabled=False, height=50,
@@ -2020,7 +2019,7 @@ def main(page: ft.Page):
 
 if __name__ == "__main__":
     logging.info(f"DEBUG: {os.getenv('DEBUG')}")
-    if bool(os.getenv('DEBUG')):
+    if os.getenv('DEBUG') == '1':
         ft.app(
             target=main,
             assets_dir='assets',
