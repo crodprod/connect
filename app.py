@@ -2,6 +2,7 @@ import datetime
 import logging
 import math
 import os
+import platform
 import random
 import re
 import time
@@ -26,12 +27,15 @@ from flet_elements_2.telegram import send_telegam_message, send_telegram_documen
 os.environ['FLET_WEB_APP_PATH'] = '/connect'
 current_directory = os.path.dirname(os.path.abspath(__file__))
 parent_directory = os.path.dirname(current_directory)
-load_dotenv()
+
+if platform.system() == "Windows":
+    env_path = r"D:\CROD_MEDIA\.env"
+else:
+    env_path = r"/root/crod/.env"
+load_dotenv(dotenv_path=env_path)
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s")
-
-print(os.getenv('ID_GROUP_ERRORS'))
 
 
 def create_db_connection():
@@ -40,7 +44,8 @@ def create_db_connection():
             host=os.getenv('DB_HOST'),
             user=os.getenv('DB_USER'),
             password=os.getenv('DB_PASSWORD'),
-            database=os.getenv('DB_NAME')
+            database=os.getenv('DB_NAME'),
+            port=3310,
         )
         cur = connection.cursor(dictionary=True)
         connection.autocommit = True
