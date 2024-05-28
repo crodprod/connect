@@ -2019,6 +2019,7 @@ def main(page: ft.Page):
 
 
 if __name__ == "__main__":
+    logging.info(f"DEBUG: {os.getenv('DEBUG')}")
     if bool(os.getenv('DEBUG')):
         ft.app(
             target=main,
