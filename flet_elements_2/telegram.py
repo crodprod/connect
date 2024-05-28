@@ -8,7 +8,6 @@ def send_telegam_message(tID, message_text):
     url = f'https://api.telegram.org/bot{getenv("BOT_TOKEN")}/sendMessage'
     data = {'chat_id': tID, 'text': message_text, "parse_mode": "Markdown"}
     response = post(url=url, data=data)
-    print(response.status_code, response.content)
 
 
 def send_telegram_document(tID, filepath: str, description: str):
