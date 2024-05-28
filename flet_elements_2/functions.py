@@ -36,7 +36,7 @@ def get_system_list():
     not_working = []
 
     for service in services_list:
-        if bool(os.getenv('DEBUG')):
+        if os.getenv('DEBUG') == '1':
             pass
             # not_working.append(service)
         else:

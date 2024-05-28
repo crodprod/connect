@@ -161,7 +161,7 @@ def main(page: ft.Page):
             # print('err 1')
 
     def make_reboot(target: str):
-        if bool(os.getenv('DEBUG')):
+        if os.getenv('DEBUG') == '1':
             response = True
         else:
             response = reboot_systemd(target)
@@ -184,7 +184,7 @@ def main(page: ft.Page):
                 'text': ft.Text("не доступен")
             },
         }
-        if bool(os.getenv('DEBUG')):
+        if os.getenv('DEBUG') == '1':
             status_value = False
         else:
             status_value = check_systemd(target)
@@ -1572,7 +1572,7 @@ def main(page: ft.Page):
         password=True
     )
 
-    if bool(os.getenv('DEBUG')):
+    if os.getenv('DEBUG') == '1':
         password_field.value = "lrrrtm"
 
     button_login = ft.ElevatedButton("Войти", width=250, on_click=lambda _: login(),
@@ -1989,7 +1989,7 @@ def main(page: ft.Page):
         ],
     )
 
-    if bool(os.getenv('DEBUG')):
+    if os.getenv('DEBUG') == '1':
         page.window_width = 377
         page.window_height = 768
         # page.route = "/modulecheck?mentor_id=1&module_id=1"
@@ -1999,7 +1999,7 @@ def main(page: ft.Page):
     current_url = urlparse(page.route)
     url_params = parse_qs(current_url.query)
     if current_url.path == '/':
-        if bool(os.getenv('DEBUG')):
+        if os.getenv('DEBUG') == '1':
             # login()
             change_screen("login")
         else:
