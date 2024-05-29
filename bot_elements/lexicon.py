@@ -1,6 +1,6 @@
 from aiogram.utils import markdown
 
-base_crod_url = "https://crodconnect.ddns.net"
+base_crod_url = "https://crodconnect.ru"
 
 lexicon = {
     'hello_messages': {

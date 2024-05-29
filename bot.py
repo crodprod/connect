@@ -4,6 +4,12 @@ import logging
 import os
 import platform
 import re
+import time
+
+import redis
+import hmac
+import hashlib
+import base64
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters.command import Command, CommandStart, CommandObject
@@ -22,11 +28,18 @@ from bot_elements.callback_factory import TeachersCallbackFactory, MentorsCallba
 from bot_elements.database import DataBase
 from bot_elements.lexicon import lexicon, base_crod_url
 from bot_elements.keyboards import kb_hello, kb_main, tasker_kb, reboot_bot_kb, radio_kb, check_apply_to_channel_kb
+from bot_elements.signed_functions import generate_signed_url
 from bot_elements.states import Radio, Feedback
-from functions import load_config_file, update_config_file
+from bot_elements.functions import load_config_file, update_config_file
 from wording.wording import get_grouplist, get_feedback
 
-load_dotenv()
+if platform.system() == "Windows":
+    env_path = r"D:\CROD_MEDIA\.env"
+else:
+    env_path = r"/root/crod/.env"
+load_dotenv(dotenv_path=env_path)
+SECRET_KEY = os.getenv('SECRET_KEY')
+
 logging.basicConfig(level=logging.INFO)
 current_directory = os.path.dirname(os.path.abspath(__file__))
 config = load_config_file('config.json')
@@ -39,6 +52,14 @@ db = DataBase(
     user=os.getenv('DB_USER'),
     password=os.getenv('DB_PASSWORD'),
     database=os.getenv('DB_NAME'),
+    port=3310
+)
+
+redis = redis.StrictRedis(
+    host=os.getenv('DB_HOST'),
+    port=os.getenv('REDIS_PORT'),
+    password=os.getenv('REDIS_PASSWORD'),
+    decode_responses=True
 )
 
 statuses = {
@@ -71,6 +92,10 @@ months = {
 
 def get_text_link(title: str, link: str):
     return f"<a href='{link}'>{title}</a>"
+
+
+def set_redis_hash(sign, index):
+    redis.set(index, sign, 20)
 
 
 async def is_pass_phrase_ok(table: str, pass_phrase: str):
@@ -505,10 +530,16 @@ async def callbacks_mentors(callback: types.CallbackQuery, callback_data: Mentor
             await get_module_list(callback)
         elif action == "qrc":
             await callback.message.delete()
+            target = 'children'
+            url = f"{base_crod_url}/connect/showqr?target={target}&value={user_info['group_num']}"
+            generator = generate_signed_url(url, SECRET_KEY)
+            signed_url, sign = generator[0], generator[1]
+            set_redis_hash(sign, f"{target}{user_info['group_num']}")
+            print(signed_url)
             btn = keyboard.InlineKeyboardBuilder().button(
                 text="Показать QR-коды #️⃣",
                 web_app=types.WebAppInfo(
-                    url=f"{base_crod_url}/connect/showqr?target={'children'}&value={user_info['group_num']}"
+                    url=signed_url
                 )
             )
             await callback.message.answer(
@@ -517,10 +548,15 @@ async def callbacks_mentors(callback: types.CallbackQuery, callback_data: Mentor
             )
         elif action == "traffic":
             await callback.message.delete()
+            module_id = 1
+            url = f"{base_crod_url}/connect/modulecheck?mentor_id={user_info['id']}&module_id={module_id}"
+            generator = generate_signed_url(url, SECRET_KEY)
+            signed_url, sign = generator[0], generator[1]
+            set_redis_hash(sign, f"{user_info['id']}{module_id}")
             btn = keyboard.InlineKeyboardBuilder().button(
                 text="Отметить посещаемость",
                 web_app=types.WebAppInfo(
-                    url=f"{base_crod_url}/connect/modulecheck?mentor_id={user_info['id']}&module_id={1}"
+                    url=signed_url
                 )
             )
             await callback.message.answer(

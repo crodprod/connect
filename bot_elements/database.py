@@ -5,12 +5,15 @@ logging.basicConfig(level=logging.INFO)
 
 
 class DataBase:
-    def __init__(self, host, user, password, database):
+    def __init__(self, host, user, password, database, port):
         self.host = host
         self.user = user
         self.password = password
         self.database = database
-        self.connection = None
+        self.connection = None,
+        self.port = port
+
+        print(host, user, password, database, port)
 
     def connect(self):
         try:
@@ -18,9 +21,10 @@ class DataBase:
                 host=self.host,
                 user=self.user,
                 password=self.password,
-                database=self.database
+                database=self.database,
+                port=self.port
             )
-            # print("Connected to MySQL database")
+            print("Connected to MySQL database")
         except mysql.connector.Error as err:
             print(f"Error: {err}")
             self.connection = None
