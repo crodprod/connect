@@ -84,7 +84,7 @@ def url_sign_check(sign: str, index: str):
 def main(page: ft.Page):
     page.vertical_alignment = ft.MainAxisAlignment.CENTER,
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
-    page.title = "Connect"
+    page.title = "Коннект"
     page.theme_mode = ft.ThemeMode.DARK
     page.theme = ft.Theme(
         font_family="Geologica",
@@ -149,7 +149,7 @@ def main(page: ft.Page):
         print(response)
         text = {
             -1: "Вы перешли по некорректной ссылке, попробуйте ещё раз",
-            0: "Ссылка, по которой вы перешли, не действительна, попробуйте ещё раз",
+            0: "Ссылка, по которой вы перешли, недействительна, попробуйте ещё раз",
             1: "Всё ок!"
         }
 
