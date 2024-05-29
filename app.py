@@ -9,6 +9,7 @@ import time
 
 import flet as ft
 import qrcode
+import redis
 import xlrd
 from dotenv import load_dotenv
 from mysql.connector import connect, Error as sql_error
@@ -23,6 +24,7 @@ from flet_elements_2.modules_locations import locations
 from flet_elements_2.screens import screens
 from flet_elements_2.systemd import reboot_systemd, check_systemd
 from flet_elements_2.telegram import send_telegam_message, send_telegram_document
+from flet_elements_2.functions import is_debug
 
 os.environ['FLET_WEB_APP_PATH'] = '/connect'
 current_directory = os.path.dirname(os.path.abspath(__file__))
@@ -36,6 +38,13 @@ load_dotenv(dotenv_path=env_path)
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s")
+
+redis = redis.StrictRedis(
+    host=os.getenv('DB_HOST'),  # Замените на IP-адрес вашего сервера
+    port=os.getenv('REDIS_PORT'),
+    password=os.getenv('REDIS_PASSWORD'),  # Установите пароль, если вы его настроили
+    decode_responses=True
+)
 
 
 def create_db_connection():
@@ -59,6 +68,17 @@ def create_db_connection():
                          f"\n\n{e}"
         )
         return None, None
+
+
+def url_sign_check(sign: str, index: str):
+    if redis.exists(index):
+        print(redis.get(index), sign)
+        if redis.get(index) == sign:
+            return 1
+        else:
+            return -1
+    else:
+        return 0
 
 
 def main(page: ft.Page):
@@ -124,6 +144,22 @@ def main(page: ft.Page):
             if "createdoc" in screen:
                 change_screen("documents")
 
+    def check_url(sign, index):
+        response = url_sign_check(sign, index)
+        print(response)
+        text = {
+            -1: "Вы перешли по некорректной ссылке, попробуйте ещё раз",
+            0: "Ссылка, по которой вы перешли, не действительна, попробуйте ещё раз",
+            1: "Всё ок!"
+        }
+
+        if response in (0, -1):
+            dialog_info_title.value = "Ошибка доступа"
+            dialog_info_text.value = text[response]
+            open_dialog(dialog_info)
+            return False
+        return True
+
     def insert_children_info(table_filepath: str):
         loading_text.value = "Добавляем детей"
         open_dialog(dialog_loading)
@@ -161,14 +197,12 @@ def main(page: ft.Page):
             # print('err 1')
 
     def make_reboot(target: str):
-        if os.getenv('DEBUG') == '1':
-            response = True
-        else:
-            response = reboot_systemd(target)
-        open_sb("Сервис перезагружен", ft.colors.GREEN)
+        reboot_systemd(target)
+        open_sb("Перезагружаем", ft.colors.GREEN)
         send_telegam_message(
             tID=os.getenv('ID_GROUP_ERRORS'),
-            message_text=f"*Запрос на перезагрузку сервиса {target}.service отправлен*"
+            message_text=f"*Перезагрузка сервисов*"
+                         f"\n\nЗапрос на перезагрузку сервиса {target}.service отправлен"
         )
 
         change_screen("reboot_menu")
@@ -184,7 +218,7 @@ def main(page: ft.Page):
                 'text': ft.Text("не доступен")
             },
         }
-        if os.getenv('DEBUG') == '1':
+        if is_debug():
             status_value = False
         else:
             status_value = check_systemd(target)
@@ -758,6 +792,7 @@ def main(page: ft.Page):
             page.update()
 
             systemd_list = get_system_list()
+            print(systemd_list)
             time.sleep(2)
             if systemd_list:
                 systemd_card.color = ft.colors.RED
@@ -1107,27 +1142,33 @@ def main(page: ft.Page):
                 controls=[
                     ft.Card(
                         ft.Container(
-                            ft.Column(
+                            content=ft.Column(
                                 [
                                     ft.Image(
                                         src='icons/loading-animation.png',
                                         height=100,
-                                    ),
-                                    ft.Text("ЦРОД.Коннект (v1.0)", size=20, weight=ft.FontWeight.W_400),
-                                    ft.Text("Приложение для автоматизации процессов во время летних смен и учебных потоков в Центре развития одарённых детей", size=16, text_align=ft.TextAlign.START,
-                                            width=500),
-                                    ft.Container(ft.Divider(thickness=1), width=200),
-                                    ft.FilledTonalButton("Связаться с разработчиком", url="https://t.me/lrrrtm", icon=ft.icons.MANAGE_ACCOUNTS)
+                                    )
                                 ],
                                 alignment=ft.MainAxisAlignment.CENTER,
-                                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                                spacing=1
+                                horizontal_alignment=ft.CrossAxisAlignment.CENTER
                             ),
-                            padding=15
-                        ),
-                        width=600
-                    )
-                ]
+                            padding=10
+                        )
+                    ),
+                    ft.Column(
+                        [
+                            ft.Text("ЦРОД.Коннект (v1.0)", size=20, weight=ft.FontWeight.W_400),
+                            ft.Text("Приложение для автоматизации процессов во время летних смен и учебных потоков в Центре развития одарённых детей", size=16, text_align=ft.TextAlign.START,
+                                    width=500),
+                            ft.Container(ft.Divider(thickness=1), width=200),
+                            ft.FilledTonalButton("Связаться с разработчиком", url="https://t.me/lrrrtm", icon=ft.icons.MANAGE_ACCOUNTS)
+                        ],
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=1
+                    ),
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER
             )
             page.add(ft.Container(col, expand=True))
 
@@ -1572,9 +1613,6 @@ def main(page: ft.Page):
         password=True
     )
 
-    if os.getenv('DEBUG') == '1':
-        password_field.value = "lrrrtm"
-
     button_login = ft.ElevatedButton("Войти", width=250, on_click=lambda _: login(),
                                      disabled=False, height=50,
                                      icon=ft.icons.KEYBOARD_ARROW_RIGHT_ROUNDED)
@@ -1724,6 +1762,11 @@ def main(page: ft.Page):
         close_dialog(dialog_qr)
         open_sb("Ссылка скопирована")
 
+    def get_user_qr(e: ft.ControlEvent):
+        data = e.control.data
+        phrase = f"{data['status']}_{data['pass_phrase']}"
+        show_qr(phrase)
+
     def show_qr(phrase):
         # показ диалога с qr-кодом
 
@@ -1743,6 +1786,10 @@ def main(page: ft.Page):
         page.update()
 
     def get_showqr(target: str, value: str = ""):
+        page.appbar = None
+        loading_text.value = "Загрузка"
+        open_dialog(dialog_loading)
+
         titles = {
             'admins': "Администрация",
             'mentors': "Воспитатели",
@@ -1770,9 +1817,10 @@ def main(page: ft.Page):
                             content=ft.Text(
                                 value=user['name'],
                                 size=18,
-                                weight=ft.FontWeight.W_300
+                                weight=ft.FontWeight.W_300,
                             ),
-                            on_click=lambda _: show_qr(f"{target}_{user['pass_phrase']}")
+                            data={'status': target, 'pass_phrase': user['pass_phrase']},
+                            on_click=get_user_qr
                         )
                     )
                     users_col.controls.append(ft.Divider(thickness=1))
@@ -1780,22 +1828,29 @@ def main(page: ft.Page):
                 qr_screen_col.controls = [
                     ft.Card(
                         ft.Container(
-                            ft.Column(
-                                [ft.Text(f"{group_title}", size=18, weight=ft.FontWeight.W_500)],
-                                width=page.width
-                            ),
-                            padding=15
+                            content=ft.ListTile(
+                                title=ft.Text(f"Список QR-кодов", size=16),
+                                subtitle=ft.Text(group_title, size=20, weight=ft.FontWeight.W_400),
+                            )
                         )
                     ),
                     users_col
                 ]
                 page.add(qr_screen_col)
+                close_dialog(dialog_loading)
             else:
                 dialog_info_title.value = "QR-коды"
                 dialog_info_text.value = f"В группе «{group_title}» все пользователи зарегистрированы"
                 open_dialog(dialog_info)
+        else:
+            dialog_info_title.value = "Ошибка"
+            dialog_info_text.value = f"При получении данных возникла ошибка, попробуйте ещё раз"
+            open_dialog(dialog_info)
 
     def get_modulecheck(mentor_id: str, module_id: str):
+        page.appbar = None
+        loading_text.value = "Загрузка"
+        open_dialog(dialog_loading)
 
         query = "SELECT name FROM modules WHERE id = %s"
         module_info = make_db_request(query, (module_id,), get_many=False)
@@ -1824,13 +1879,11 @@ def main(page: ft.Page):
             module_traffic_col.controls = [
                 ft.Card(
                     ft.Container(
-                        ft.Column(
-                            [ft.Text(f"{module_info['name']}", size=18, weight=ft.FontWeight.W_500)],
-                            width=page.width
-                        ),
-                        padding=15
-                    ),
-                    # elevation=10
+                        content=ft.ListTile(
+                            title=ft.Text(f"Проверка посещаемости", size=16),
+                            subtitle=ft.Text(f"{module_info['name']}", size=20, weight=ft.FontWeight.W_400),
+                        )
+                    )
                 ),
                 ft.Divider(thickness=1),
                 children_list_col,
@@ -1842,6 +1895,7 @@ def main(page: ft.Page):
             page.add(module_traffic_col)
         else:
             pass
+        close_dialog(dialog_loading)
 
     page.drawer = ft.NavigationDrawer(
         controls=[
@@ -1989,37 +2043,42 @@ def main(page: ft.Page):
         ],
     )
 
-    if os.getenv('DEBUG') == '1':
+    if is_debug():
         page.window_width = 377
         page.window_height = 768
-        # page.route = "/modulecheck?mentor_id=1&module_id=1"
+        # page.route = "/app"
+        page.route = "/modulecheck?mentor_id=26&module_id=1&signature=265013c29e25b5c1a7b3782fcefac903c473d53c4d55b593e8b8d35990fd43db"
         # page.route = "/showqr?target=children&value=1"
 
     # Точка входа
-    current_url = urlparse(page.route)
-    url_params = parse_qs(current_url.query)
-    if current_url.path == '/':
-        if os.getenv('DEBUG') == '1':
-            # login()
+    url = urlparse(page.route)
+    url_path = url.path
+    url_params = parse_qs(url.query)
+
+    if url_path == "/":
+        if is_debug():
+            password_field.value = "lrrrtm"
             change_screen("login")
+            login()
         else:
             change_screen("login")
 
-    elif current_url.path == '/modulecheck':
-        # Отметка посещаемости
-        change_screen("modulecheck", url_params)
+    elif url_path == "/modulecheck":
+        mentor_id, module_id, sign = url_params['mentor_id'][0], url_params['module_id'][0], url_params['signature'][0]
+        if check_url(sign, f"{mentor_id}{module_id}"):
+            get_modulecheck(mentor_id, module_id)
 
-    elif current_url.path == '/showqr':
-        # Список qr-кодов
-        change_screen("showqr", url_params)
+    elif url_path == "/showqr":
+        target, value, sign = url_params['target'][0], url_params['value'][0], url_params['signature'][0]
+        if check_url(sign, f"{target}{value}"):
+            get_showqr(target, value)
 
     os.environ["FLET_SECRET_KEY"] = os.urandom(12).hex()
     page.update()
 
 
 if __name__ == "__main__":
-    logging.info(f"DEBUG: {os.getenv('DEBUG')}")
-    if os.getenv('DEBUG') == '1':
+    if is_debug():
         ft.app(
             target=main,
             assets_dir='assets',
@@ -2032,6 +2091,5 @@ if __name__ == "__main__":
             target=main,
             assets_dir='assets',
             upload_dir='assets/uploads',
-            # view=ft.AppView.WEB_BROWSER,
             port=8001
         )

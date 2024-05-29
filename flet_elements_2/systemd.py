@@ -1,3 +1,4 @@
+import platform
 from subprocess import Popen, PIPE
 
 systemctl_path = "/usr/bin/systemctl"
@@ -14,6 +15,9 @@ services_list = [
 
 
 def check_systemd(service_name: str) -> bool():
+    if platform.system() == "Windows":
+        return False
+
     command = [systemctl_path, 'status', f'{service_name}.service']
     process = Popen(command, stdout=PIPE, stderr=PIPE)
     output, error = process.communicate()
