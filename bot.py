@@ -305,7 +305,7 @@ async def deep_linking(message: Message, command: CommandObject):
         if platform.system() == "Windows":
             path = r"D:\CROD_MEDIA\tasker\taskapp_data\users.json"
         else:
-            path = "root/crod/tasker/taskapp_data/users.json"
+            path = "/root/crod/tasker/taskapp_data/users.json"
         tasker_users = load_config_file(path)
         fl = False
         for user in tasker_users:
