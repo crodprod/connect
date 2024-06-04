@@ -39,46 +39,65 @@ load_dotenv(dotenv_path=env_path)
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s")
 
-redis = redis.StrictRedis(
-    host=os.getenv('DB_HOST'),  # Замените на IP-адрес вашего сервера
-    port=os.getenv('REDIS_PORT'),
-    password=os.getenv('REDIS_PASSWORD'),  # Установите пароль, если вы его настроили
-    decode_responses=True
-)
+startup = {
+    'mysql': {
+        'status': True,
+        'msg': ""
+    },
+    'redis': {
+        'status': True,
+        'msg': ""
+    }
+}
 
+try:
+    logging.info("Redis: connecting...")
+    redis = redis.StrictRedis(
+        host=os.getenv('DB_HOST'),
+        port=os.getenv('REDIS_PORT'),
+        password=os.getenv('REDIS_PASSWORD'),
+        decode_responses=True
+    )
+    redis.exists("0")
+    logging.info("Redis: connected!")
+except Exception as e:
+    logging.error(f"Redis: {e}")
+    startup['redis']['status'] = False
+    startup['redis']['msg'] = str(e)
 
-def create_db_connection():
-    try:
-        connection = connect(
-            host=os.getenv('DB_HOST'),
-            user=os.getenv('DB_USER'),
-            password=os.getenv('DB_PASSWORD'),
-            database=os.getenv('DB_NAME'),
-            port=3310,
-        )
-        cur = connection.cursor(dictionary=True)
-        connection.autocommit = True
-        return connection, cur
-
-    except sql_error as e:
-        logging.error(f"DATABASE CONNECTION: {e}")
-        send_telegam_message(
-            tID=os.getenv('ID_GROUP_ERRORS'),
-            message_text="*Ошибка подключения к БД при работе в Коннекте*"
-                         f"\n\n{e}"
-        )
-        return None, None
+try:
+    logging.info("MySQL: connecting...")
+    connection = connect(
+        host=os.getenv('DB_HOST'),
+        user=os.getenv('DB_USER'),
+        password=os.getenv('DB_PASSWORD'),
+        database=os.getenv('DB_NAME'),
+        port=3310
+    )
+    cur = connection.cursor(dictionary=True)
+    connection.autocommit = True
+    logging.info("MySQL: connected!")
+except Exception as e:
+    logging.error(f"MySQL: {e}")
+    startup['mysql']['status'] = False
+    startup['mysql']['msg'] = str(e)
 
 
 def url_sign_check(sign: str, index: str):
-    if redis.exists(index):
-        print(redis.get(index), sign)
-        if redis.get(index) == sign:
-            return 1
-        else:
-            return -1
-    else:
-        return 0
+    logging.info(f"Redis: getting signature (index: {index})")
+    try:
+        response = 0
+        if redis.exists(index):
+            print(redis.get(index), sign)
+            if redis.get(index) == sign:
+                response = 1
+            else:
+                response = -1
+        logging.info(f"Redis: getting OK")
+        return response
+    except Exception as e:
+        logging.error(f"Redis: {e}")
+        return -2
 
 
 def main(page: ft.Page):
@@ -102,9 +121,9 @@ def main(page: ft.Page):
     def make_db_request(sql_query: str, params: tuple = (), get_many: bool = None, put_many: bool = None):
         # обработка sql-запросов
 
-        connection, cur = create_db_connection()
+        logging.info(f"MySQL: requesting (query: {sql_query}, params: {params})")
         if connection is not None:
-            logging.info(f"DATABASE REQUEST: query: {sql_query}, params: {params}")
+            logging.info(f"MySQL: request ok")
             try:
                 data = True
                 if get_many is not None:
@@ -122,7 +141,7 @@ def main(page: ft.Page):
                 connection.commit()
                 return data
             except Exception as e:
-                logging.error(f'REQUEST ERROR: {e}')
+                logging.error(f'MySQL: {e}')
                 send_telegam_message(
                     tID=os.getenv('ID_GROUP_ERRORS'),
                     message_text="*Ошибка при выполнение запроса к БД в Коннекте*"
@@ -133,7 +152,7 @@ def main(page: ft.Page):
             dialog_info_title.value = "Ошибка БД"
             dialog_info_text.value = "Возникла ошибка при подключении к базе данных, обратитесь к администратору"
             open_dialog(dialog_info)
-            logging.error(f'CONNECTION ERROR')
+            logging.error(f'MySQL: not connected')
             open_dialog(dialog_info)
             return None
 
@@ -148,12 +167,13 @@ def main(page: ft.Page):
         response = url_sign_check(sign, index)
         print(response)
         text = {
+            -2: "При получении данных возникла ошибка, попробуйте ещё раз",
             -1: "Вы перешли по некорректной ссылке, попробуйте ещё раз",
             0: "Ссылка, по которой вы перешли, недействительна, попробуйте ещё раз",
             1: "Всё ок!"
         }
 
-        if response in (0, -1):
+        if response in (0, -1, -2):
             dialog_info_title.value = "Ошибка доступа"
             dialog_info_text.value = text[response]
             open_dialog(dialog_info)
@@ -1122,6 +1142,11 @@ def main(page: ft.Page):
                         target="crod_ws_ngrok"
                     ),
                     get_reboot_card(
+                        title="Эфир",
+                        icon=ft.icons.ADD_TASK,
+                        target="crod_stream"
+                    ),
+                    get_reboot_card(
                         title="Таскер",
                         icon=ft.icons.ADD_TASK,
                         target="crod_tasker"
@@ -1159,7 +1184,7 @@ def main(page: ft.Page):
                         [
                             ft.Text("ЦРОД.Коннект (v1.0)", size=20, weight=ft.FontWeight.W_400),
                             ft.Text("Приложение для автоматизации процессов во время летних смен и учебных потоков в Центре развития одарённых детей", size=16, text_align=ft.TextAlign.START,
-                                    width=500),
+                                    width=500, weight=ft.FontWeight.W_200),
                             ft.Container(ft.Divider(thickness=1), width=200),
                             ft.FilledTonalButton("Связаться с разработчиком", url="https://t.me/lrrrtm", icon=ft.icons.MANAGE_ACCOUNTS)
                         ],
@@ -1419,8 +1444,8 @@ def main(page: ft.Page):
     )
 
     def login():
-        loading_text.value = "Загрузка"
-        open_dialog(dialog_loading)
+        # loading_text.value = "Загрузка"
+        # open_dialog(dialog_loading)
         query = "SELECT * FROM admins WHERE password = %s and status = 'active'"
         admin_info = make_db_request(query, (password_field.value,), get_many=True)
         if admin_info is not None:
@@ -1429,7 +1454,7 @@ def main(page: ft.Page):
                 change_screen("main")
             else:
                 open_sb("Ошибка доступа", ft.colors.RED)
-        close_dialog(dialog_loading)
+        # close_dialog(dialog_loading)
         page.update()
 
     # элементы интерфейса
@@ -1631,7 +1656,7 @@ def main(page: ft.Page):
     )
 
     # Диалоги
-    dialog_info_text = ft.Text(size=18, width=600)
+    dialog_info_text = ft.Text(size=16, width=600, weight=ft.FontWeight.W_200)
     dialog_info_title = ft.Text(size=20, weight=ft.FontWeight.W_400)
     dialog_info = ft.AlertDialog(
         modal=True,
@@ -1681,8 +1706,8 @@ def main(page: ft.Page):
         dialog.open = True
         page.update()
 
-        if dialog == dialog_loading:
-            time.sleep(1)
+        # if dialog == dialog_loading:
+        #     time.sleep(1)
 
     def close_dialog(dialog: ft.AlertDialog):
         dialog.open = False
@@ -2046,8 +2071,8 @@ def main(page: ft.Page):
     if is_debug():
         page.window_width = 377
         page.window_height = 768
-        # page.route = "/app"
-        page.route = "/modulecheck?mentor_id=26&module_id=1&signature=265013c29e25b5c1a7b3782fcefac903c473d53c4d55b593e8b8d35990fd43db"
+        page.route = "/"
+        # page.route = "/modulecheck?mentor_id=26&module_id=1&signature=265013c29e25b5c1a7b3782fcefac903c473d53c4d55b593e8b8d35990fd43db"
         # page.route = "/showqr?target=children&value=1"
 
     # Точка входа
@@ -2055,29 +2080,42 @@ def main(page: ft.Page):
     url_path = url.path
     url_params = parse_qs(url.query)
 
-    if url_path == "/":
-        if is_debug():
-            password_field.value = "lrrrtm"
-            change_screen("login")
-            login()
-        else:
-            change_screen("login")
+    if all([fl[1]['status'] for fl in startup.items()]):
+        if url_path == "/":
+            if is_debug():
+                password_field.value = "lrrrtm"
+                change_screen("login")
+                login()
+            else:
+                change_screen("login")
 
-    elif url_path == "/modulecheck":
-        mentor_id, module_id, sign = url_params['mentor_id'][0], url_params['module_id'][0], url_params['signature'][0]
-        if check_url(sign, f"{mentor_id}{module_id}"):
-            get_modulecheck(mentor_id, module_id)
+        elif url_path == "/modulecheck":
+            mentor_id, module_id, sign = url_params['mentor_id'][0], url_params['module_id'][0], url_params['signature'][0]
+            if check_url(sign, f"{mentor_id}{module_id}"):
+                get_modulecheck(mentor_id, module_id)
 
-    elif url_path == "/showqr":
-        target, value, sign = url_params['target'][0], url_params['value'][0], url_params['signature'][0]
-        if check_url(sign, f"{target}{value}"):
-            get_showqr(target, value)
+        elif url_path == "/showqr":
+            target, value, sign = url_params['target'][0], url_params['value'][0], url_params['signature'][0]
+            if check_url(sign, f"{target}{value}"):
+                get_showqr(target, value)
 
-    os.environ["FLET_SECRET_KEY"] = os.urandom(12).hex()
+        os.environ["FLET_SECRET_KEY"] = os.urandom(12).hex()
+
+    else:
+        err_text = "При запуске сервисов возникли ошибки\n\n" + "\n\n".join([f"{service[0]}: {service[1]['msg']}" for service in [serivce for serivce in startup.items()] if not service[1]['status']]) + "\n\nОбратитесь к администратору"
+        send_telegam_message(
+            tID=os.getenv('ID_GROUP_ERRORS'),
+            message_text=err_text
+        )
+        dialog_info_title.value = "Запуск сервисов"
+        dialog_info_text.value = err_text
+        open_dialog(dialog_info)
     page.update()
 
 
 if __name__ == "__main__":
+    if platform.system() == "Windows":
+        os.environ['DEBUG'] = "0"
     if is_debug():
         ft.app(
             target=main,
