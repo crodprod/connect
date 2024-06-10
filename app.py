@@ -37,6 +37,14 @@ else:
     env_path = r"/root/crod/.env"
 load_dotenv(dotenv_path=env_path)
 
+if not os.path.exists(os.path.join(current_directory, 'assets/qrc')):
+    logging.info(f'Creating folder assets/qrc')
+    os.mkdir(os.path.join(current_directory, 'assets/qrc'))
+
+if not os.path.exists(os.path.join(current_directory, 'wording/generated')):
+    logging.info(f'Creating folder wording/generated')
+    os.mkdir(os.path.join(current_directory, 'wording/generated'))
+
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s")
 
