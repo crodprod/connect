@@ -1,4 +1,3 @@
-import datetime
 import logging
 import math
 import os
@@ -12,20 +11,20 @@ import qrcode
 import redis
 import xlrd
 from dotenv import load_dotenv
-from mysql.connector import connect, Error as sql_error
 from urllib.parse import urlparse, parse_qs
 from pypdf import PdfMerger
 
 from transliterate import translit
 
 import wording.wording
-from flet_elements_2.database import MySQL, RedisTable
-from flet_elements_2.functions import remove_folder_content, get_hello, get_system_list
-from flet_elements_2.modules_locations import locations
-from flet_elements_2.screens import screens
-from flet_elements_2.systemd import reboot_systemd, check_systemd
-from flet_elements_2.telegram import send_telegam_message, send_telegram_document
-from flet_elements_2.functions import is_debug
+from database import MySQL, RedisTable
+from flet_elements.dialogs import InfoDialog, LoadingDialog
+from flet_elements.functions import remove_folder_content, get_hello, get_system_list
+from flet_elements.modules_locations import locations
+from flet_elements.screens import screens
+from flet_elements.systemd import reboot_systemd, check_systemd
+from flet_elements.telegram import send_telegam_message, send_telegram_document
+from flet_elements.functions import is_debug
 
 os.environ['FLET_WEB_APP_PATH'] = '/connect'
 current_directory = os.path.dirname(os.path.abspath(__file__))
@@ -79,6 +78,7 @@ def url_sign_check(sign: str, index: str):
     try:
         response = 0
         if redis.exists(index):
+
             if redis.get(index) == sign:
                 response = 1
             else:
@@ -107,8 +107,17 @@ def main(page: ft.Page):
 
     remaining_children_traffic = []
 
+    dlg_loading = LoadingDialog(page=page)
+    dlg_info = InfoDialog(
+        title="Info",
+        content=ft.Text("Information Dialog"),
+        page=page
+    )
+
     db.connect()
+    print(db.result)
     redis.connect()
+    print(redis.result)
 
     if db.result['status'] == "error":
         startup['mysql']['status'] = False
@@ -118,7 +127,7 @@ def main(page: ft.Page):
         startup['redis']['status'] = False
         startup['redis']['msg'] = redis.result['message']
 
-    def make_db_request(sql_query: str, params: tuple = (), get_many: bool = None, put_many: bool = None):
+    def make_db_request(sql_query: str, params: tuple = ()):
 
         logging.info(f"Executing: {sql_query} ({params})")
         db.execute(sql_query, params)
@@ -126,59 +135,64 @@ def main(page: ft.Page):
         if db.result['status'] == "ok":
             return db.data
         else:
-            pass
+            dlg_info.title = "Ошибка БД"
+            dlg_info.content = ft.Text(
+                f"При выполнении запроса к базе данных возникла ошибка, попробуйте позже или обратитесь к администратору."
+                f"\n\nЗапрос: {sql_query}"
+                f"\nОшибка: {db.result['message']}",
+                width=600, size=16, weight=ft.FontWeight.W_200
+            )
+            dlg_info.open()
 
     def is_telegrammed(target: str = None):
-
         messages = {
-            None: "Не удалось отправить сообщение, так как вы не зарегистрированы в Telegram-боте. Попробуйте ещё раз после регистрации",
-            "confirm": "Не удалось отправить код подтверждения, так как вы не зарегистрированы в Telegram-боте. Попробуйте ещё раз после регистрации",
-            "docs": "Не удалось отправить документ, так как вы не зарегистрированы в Telegram-боте. Попробуйте выполнить запрос ещё раз после регистрации"
+            None: "Не удалось отправить сообщение, так как вы не зарегистрированы в Telegram-боте. Попробуйте ещё раз после регистрации.",
+            "confirm": "Не удалось отправить код подтверждения, так как вы не зарегистрированы в Telegram-боте. Попробуйте ещё раз после регистрации.",
+            "docs": "Не удалось отправить документ, так как вы не зарегистрированы в Telegram-боте. Попробуйте выполнить запрос ещё раз после регистрации."
         }
 
         if password_field.data['telegram_id'] is None:
-            dialog_info_title.value = "Ошибка отправки"
-            dialog_info_text.value = messages[target]
-            page.dialog = dialog_info
-            open_dialog(dialog_info)
+            dlg_info.title = "Отправка сообщения"
+            dlg_info.content = ft.Text(messages[target], width=600, size=16, weight=ft.FontWeight.W_200)
+            dlg_info.open()
             return False
         return True
 
-    def raise_error(location, error_message: str, screen: str):
-        if location == dialog_loading:
-            close_dialog(dialog_loading)
-            open_sb(error_message, ft.colors.RED)
-            if "createdoc" in screen:
-                change_screen("documents")
+    # def raise_error(location, error_message: str, screen: str):
+    #     if location == dialog_loading:
+    #         dlg_loading.close()
+    #         open_sb(error_message, ft.colors.RED)
+    #         if "createdoc" in screen:
+    #             change_screen("documents")
 
     def check_url(sign, index):
         response = url_sign_check(sign, index)
         print(response)
         text = {
-            -2: "При получении данных возникла ошибка, попробуйте ещё раз",
-            -1: "Вы перешли по некорректной ссылке, попробуйте ещё раз",
-            0: "Ссылка, по которой вы перешли, недействительна, попробуйте ещё раз",
+            -2: "При получении данных возникла ошибка, попробуйте ещё раз.",
+            -1: "Вы перешли по некорректной ссылке, попробуйте ещё раз.",
+            0: "Ссылка, по которой вы перешли, недействительна, попробуйте ещё раз.",
             1: "Всё ок!"
         }
 
         if response in (0, -1, -2):
-            dialog_info_title.value = "Ошибка доступа"
-            dialog_info_text.value = text[response]
-            open_dialog(dialog_info)
+            dlg_info.title = "Ошибка доступа"
+            dlg_info.content = ft.Text(text[response], width=600, size=16, weight=ft.FontWeight.W_200)
+            dlg_info.open(action_btn_visible=False)
             return False
         return True
 
     def insert_children_info(table_filepath: str):
-        loading_text.value = "Добавляем детей"
-        open_dialog(dialog_loading)
+        dlg_loading.loading_text = "Добавляем детей"
+        dlg_loading.open()
         wb = xlrd.open_workbook(table_filepath)
         ws = wb.sheet_by_index(0)
         rows_num = ws.nrows
         row = 1
-        query = "UPDATE children SET status = 'removed'"
-        if make_db_request(query, put_many=False) is not None:
+        query = "UPDATE crodconnect.children SET status = 'removed'"
+        if make_db_request(query) is not None:
             while row < rows_num:
-                dialog_loading.content.controls[0].controls[0].value = f"Добавляем детей {row}/{rows_num}"
+                dlg_loading.dialog.content.controls[0].controls[0].value = f"Добавляем детей {row}/{rows_num}"
                 page.update()
                 child = []
                 for col in range(5):
@@ -187,22 +201,18 @@ def main(page: ft.Page):
                 birth = xlrd.xldate.xldate_as_tuple(child[1], 0)
                 # print(birth)
                 birth = f"{birth[0]}-{birth[1]}-{birth[2]}"
-                query = "INSERT INTO children (name, group_num, birth, comment, parrent_name, parrent_phone, pass_phrase) VALUES (%s, %s, %s, %s, %s, %s, %s)"
-                response = make_db_request(query, (child[0], random.randint(1, 5), birth, child[2], child[3], child[4], pass_phrase,), put_many=False)
+                query = "INSERT INTO crodconnect.children (name, group_num, birth, comment, parrent_name, parrent_phone, pass_phrase) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+                response = make_db_request(query, (child[0], random.randint(1, 5), birth, child[2], child[3], child[4], pass_phrase,))
                 if response is None:
-                    close_dialog(dialog_loading)
+                    dlg_loading.close()
                     open_sb("Ошибка БД", ft.colors.RED)
                     return
                 row += 1
-            close_dialog(dialog_loading)
+            dlg_loading.close()
             change_screen("main")
             open_sb("Список детей загружен", ft.colors.GREEN)
             if os.path.exists(f'assets/uploads/{table_filepath}'):
                 os.remove(f'assets/uploads/{table_filepath}')
-
-        else:
-            open_sb("Ошибка БД", ft.colors.RED)
-            # print('err 1')
 
     def make_reboot(target: str):
         reboot_systemd(target)
@@ -312,66 +322,56 @@ def main(page: ft.Page):
         return phrase
 
     def add_new_mentor():
-        query = "INSERT INTO mentors (name, group_num, pass_phrase, status) VALUES (%s, %s, %s, 'active')"
+        query = "INSERT INTO crodconnect.mentors (name, group_num, pass_phrase, status) VALUES (%s, %s, %s, 'active')"
         name = new_mentor_name_field.value.strip()
         pass_phrase = create_passphrase(name)
-        response = make_db_request(query, (name, new_mentor_group_dd.value, pass_phrase), put_many=False)
+        response = make_db_request(query, (name, new_mentor_group_dd.value, pass_phrase))
         if response is not None:
             change_screen("mentors_info")
             open_sb("Воспитатель добавлен", ft.colors.GREEN)
-        else:
-            open_sb("Ошибка БД", ft.colors.RED)
 
     def add_new_module():
-        loading_text.value = "Добавляем модуль"
-        open_dialog(dialog_loading)
-        query = "INSERT INTO modules (name, seats_max, location) VALUES (%s, %s, %s)"
-        make_db_request(query, (new_module_name_field.value, new_module_seats_field.value, new_module_location_dd.value), put_many=False)
+        dlg_loading.loading_text = "Добавляем модуль"
+        dlg_loading.open()
+        query = "INSERT INTO crodconnect.modules (name, seats_max, location) VALUES (%s, %s, %s)"
+        make_db_request(query, (new_module_name_field.value, new_module_seats_field.value, new_module_location_dd.value))
 
-        query = "SELECT id FROM modules WHERE name = %s"
-        module_id = make_db_request(query, (new_module_name_field.value,), get_many=False)['id']
+        query = "SELECT id FROM crodconnect.modules WHERE name = %s"
+        module_id = make_db_request(query, (new_module_name_field.value,))['id']
 
-        query = "INSERT INTO teachers (name, module_id, pass_phrase) VALUES (%s, %s, %s)"
+        query = "INSERT INTO crodconnect.teachers (name, module_id, pass_phrase) VALUES (%s, %s, %s)"
         name = new_module_teacher_name_field.value.strip()
         pass_phrase = create_passphrase(name)
 
-        response = make_db_request(query, (name, module_id, pass_phrase,), put_many=False)
-        close_dialog(dialog_loading)
+        response = make_db_request(query, (name, module_id, pass_phrase,))
+        dlg_loading.close()
         if response is not None:
             change_screen("modules_info")
             open_sb("Модуль добавлен", ft.colors.GREEN)
-        else:
-            open_sb("Ошибка БД", ft.colors.RED)
 
     def add_new_admin():
-        query = "INSERT INTO admins (name, pass_phrase, password) VALUES (%s, %s, %s)"
+        query = "INSERT INTO crodconnect.admins (name, pass_phrase, password) VALUES (%s, %s, %s)"
         name = new_admin_name_field.value.strip()
         pass_phrase = create_passphrase(name)
         password = os.urandom(3).hex()
-        response = make_db_request(query, (name, pass_phrase, password,), put_many=False)
+        response = make_db_request(query, (name, pass_phrase, password,))
         if response is not None:
             change_screen("admins_info")
             open_sb("Администратор добавлен", ft.colors.GREEN)
-        else:
-            open_sb("Ошибка БД", ft.colors.RED)
 
     def remove_mentor(e: ft.ControlEvent):
-        query = "DELETE FROM mentors WHERE pass_phrase = %s"
-        response = make_db_request(query, (e.control.data,), put_many=False)
+        query = "DELETE FROM crodconnect.mentors WHERE pass_phrase = %s"
+        response = make_db_request(query, (e.control.data,))
         if response is not None:
             open_sb("Воспитатель удалён")
             change_screen("mentors_info")
-        else:
-            open_sb("Ошибка БД", ft.colors.RED)
 
     def remove_admin(e: ft.ControlEvent):
-        query = "DELETE FROM admins WHERE pass_phrase = %s"
-        response = make_db_request(query, (e.control.data,), put_many=False)
+        query = "DELETE FROM crodconnect.admins WHERE pass_phrase = %s"
+        response = make_db_request(query, (e.control.data,))
         if response is not None:
             open_sb("Администратор удалён")
             change_screen("admins_info")
-        else:
-            open_sb("Ошибка БД", ft.colors.RED)
 
     def goto_change_mentor_group(e: ft.ControlEvent):
         dialog_edit_mentor_group.data = e.control.data
@@ -379,26 +379,23 @@ def main(page: ft.Page):
 
     def change_mentor_group(new_group):
         close_dialog(dialog_edit_mentor_group)
-        loading_text.value = "Обновляем"
-        open_dialog(dialog_loading)
-        query = "UPDATE mentors SET group_num = %s WHERE pass_phrase = %s"
-        response = make_db_request(query, (new_group, dialog_edit_mentor_group.data,), put_many=False)
-        close_dialog(dialog_loading)
+        dlg_loading.loading_text = "Обновляем"
+        dlg_loading.open()
+        query = "UPDATE crodconnect.mentors SET group_num = %s WHERE pass_phrase = %s"
+        response = make_db_request(query, (new_group, dialog_edit_mentor_group.data,))
+        dlg_loading.close()
         if response is not None:
             change_screen('mentors_info')
             open_sb("Группа изменена", ft.colors.GREEN)
 
-            query = "SELECT telegram_id from mentors WHERE pass_phrase = %s"
-            mentor_tid = make_db_request(query, (dialog_edit_mentor_group.data,), get_many=False)['telegram_id']
+            query = "SELECT telegram_id from crodconnect.mentors WHERE pass_phrase = %s"
+            mentor_tid = make_db_request(query, (dialog_edit_mentor_group.data,))['telegram_id']
             if mentor_tid is not None:
                 send_telegam_message(
                     tID=mentor_tid,
                     message_text="*Изменение группы*"
                                  f"\n\nВы были переведены администратором в *группу №{new_group}*"
                 )
-
-        else:
-            open_sb("Ошибка БД", ft.colors.RED)
 
     def validate(target: str):
         if target == "mentor":
@@ -425,26 +422,27 @@ def main(page: ft.Page):
         page.update()
 
     def generate_document(e: ft.ControlEvent):
-        loading_text.value = "Генерируем документ"
-        open_dialog(dialog_loading)
+        dlg_loading.loading_text = "Генерируем документ"
+        dlg_loading.open()
 
         doctype = e.control.data['doctype']
         pdf_filepaths = []
 
-        query = "SELECT telegram_id from admins WHERE password = %s"
-        response = make_db_request(query, (password_field.value,), get_many=False)
+        query = "SELECT telegram_id from crodconnect.admins WHERE password = %s"
+        response = make_db_request(query, (password_field.value,))
 
         if is_telegrammed('docs'):
             caption = "*Генерация документов*\n\n"
+            merger = PdfMerger()
+
             if doctype == "groups":
-                merger = PdfMerger()
 
                 for group_num in range(1, 6):
-                    dialog_loading.content.controls[0].controls[0].value = f"Генерируем документ (группа {group_num}/{5})"
+                    dlg_loading.dialog.content.controls[0].controls[0].value = f"Генерируем документ (группа {group_num}/{5})"
                     page.update()
 
-                    query = "SELECT * FROM children WHERE group_num = %s AND status = 'active'"
-                    group_list = make_db_request(query, (group_num,), get_many=True)
+                    query = "SELECT * FROM crodconnect.children WHERE group_num = %s AND status = 'active'"
+                    group_list = make_db_request(query, (group_num,))
 
                     if group_list is not None:
                         if group_list:
@@ -455,9 +453,6 @@ def main(page: ft.Page):
 
                             merger.append(filepath)
                             pdf_filepaths.append(group_list_filename)
-                    else:
-                        raise_error(dialog_loading, "Ошибка получения списка группы", 'createdoc')
-                        return
 
                 merged_filepath = f"{current_directory}/wording/generated/grouplist.pdf"
                 merger.write(merged_filepath)
@@ -481,15 +476,14 @@ def main(page: ft.Page):
                         os.remove(pdf)
 
             elif doctype == "qr":
-                merger = PdfMerger()
 
                 # для групп детей
                 for group_num in range(1, 6):
-                    dialog_loading.content.controls[0].controls[0].value = f"Генерируем документ (группа {group_num}/{5})"
+                    dlg_loading.dialog.content.controls[0].controls[0].value = f"Генерируем документ (группа {group_num}/{5})"
                     page.update()
 
-                    query = "SELECT * FROM children WHERE group_num = %s AND status = 'active'"
-                    group_list = make_db_request(query, (group_num,), get_many=True)
+                    query = "SELECT * FROM crodconnect.children WHERE group_num = %s AND status = 'active'"
+                    group_list = make_db_request(query, (group_num,))
 
                     if group_list is not None:
                         if group_list:
@@ -500,16 +494,13 @@ def main(page: ft.Page):
 
                             merger.append(filepath)
                             pdf_filepaths.append(qr_list_groups_filename)
-                    else:
-                        raise_error(dialog_loading, "Ошибка получения списка группы", 'createdoc')
-                        return
-                # для остальных
+
                 for s in ['mentors', 'teachers']:
-                    dialog_loading.content.controls[0].controls[0].value = f"Генерируем документ ({s})"
+                    dlg_loading.dialog.content.controls[0].controls[0].value = f"Генерируем документ ({s})"
                     page.update()
 
                     query = f"SELECT * FROM {s} WHERE status = 'active'"
-                    group_list = make_db_request(query, get_many=True)
+                    group_list = make_db_request(query)
 
                     if group_list is not None:
                         if group_list:
@@ -517,9 +508,6 @@ def main(page: ft.Page):
                             filepath = f"{current_directory}/wording/generated/{qr_list_groups_filename}.pdf"
                             merger.append(filepath)
                             pdf_filepaths.append(qr_list_groups_filename)
-                    else:
-                        raise_error(dialog_loading, "Ошибка получения списка группы", 'createdoc')
-                        return
 
                 merged_filepath = f"{current_directory}/wording/generated/qrlist.pdf"
                 merger.write(merged_filepath)
@@ -545,24 +533,23 @@ def main(page: ft.Page):
                         os.remove(pdf)
 
             elif doctype == "modules":
-                query = "SELECT * FROM modules WHERE status = 'active'"
-                modules_list = make_db_request(query, get_many=True)
+                query = "SELECT * FROM crodconnect.modules WHERE status = 'active'"
+                modules_list = make_db_request(query)
 
                 if modules_list is not None:
                     if modules_list:
                         merger = PdfMerger()
 
                         for module in modules_list:
-
-                            dialog_loading.content.controls[0].controls[0].value = f"Генерируем документ ({module['name'][:10]}...)"
+                            dlg_loading.dialog.content.controls[0].controls[0].value = f"Генерируем документ ({module['name'][:10]}...)"
                             page.update()
 
-                            query = "SELECT * FROM teachers WHERE module_id = %s and status = 'active'"
-                            teacher_info = make_db_request(query, (module['id'],), get_many=False)
+                            query = "SELECT * FROM crodconnect.teachers WHERE module_id = %s and status = 'active'"
+                            teacher_info = make_db_request(query, (module['id'],))
 
                             if teacher_info is not None:
-                                query = "SELECT * FROM children WHERE id in (SELECT child_id FROM modules_records WHERE module_id = %s) and status = 'active'"
-                                children_list = make_db_request(query, (module['id'],), get_many=True)
+                                query = "SELECT * FROM crodconnect.children WHERE id in (SELECT child_id FROM crodconnect.modules_records WHERE module_id = %s) and status = 'active'"
+                                children_list = make_db_request(query, (module['id'],))
 
                                 if children_list is not None:
                                     if children_list:
@@ -573,13 +560,6 @@ def main(page: ft.Page):
 
                                         merger.append(filepath)
                                         pdf_filepaths.append(filename)
-
-                                else:
-                                    raise_error(dialog_loading, "Ошибка получения списка детей", 'createdoc')
-                                    return
-                            else:
-                                raise_error(dialog_loading, "Ошибка получения информации о преподавателе", 'createdoc')
-                                return
 
                         if len(pdf_filepaths) > 0:
                             merged_filepath = f"{current_directory}/wording/generated/modulelist.pdf"
@@ -605,18 +585,12 @@ def main(page: ft.Page):
                         for pdf in pdf_filepaths:
                             if os.path.exists(pdf):
                                 os.remove(pdf)
-                    else:
-                        raise_error(dialog_loading, "Список модулей пуст", 'createdoc')
-                        return
-                else:
-                    raise_error(dialog_loading, "Ошибка получения списка модулей", 'createdoc')
-                    return
             elif doctype == "navigation":
-                query = "SELECT name from shift_info where id = 0"
-                shift_name = make_db_request(query, get_many=False)
+                query = "SELECT name from crodconnect.shift_info where id = 0"
+                shift_name = make_db_request(query)
 
-                query = "SELECT * FROM modules WHERE status = 'active'"
-                modules = make_db_request(query, get_many=True)
+                query = "SELECT * FROM crodconnect.modules WHERE status = 'active'"
+                modules = make_db_request(query)
 
                 if modules is not None:
                     navigation_filename = wording.wording.get_modules_navigation(modules, shift_name['name'])
@@ -634,10 +608,8 @@ def main(page: ft.Page):
                         open_sb("Ошибка Telegram", ft.colors.RED)
                     if os.path.exists(filepath):
                         os.remove(filepath)
-                else:
-                    open_sb("Ошибка БД", ft.colors.RED)
         pdf_filepaths.clear()
-        close_dialog(dialog_loading)
+        dlg_loading.close()
 
     def get_document_card(title: str, sb: str, icon: ft.icons, doctype: str):
         card = ft.Card(
@@ -690,78 +662,12 @@ def main(page: ft.Page):
             page.add(ft.Container(login_col, expand=True))
 
         elif target == "main":
-            query = "SELECT * FROM admins WHERE password = %s"
-            admin = make_db_request(query, (password_field.value,), get_many=False)
+            query = "SELECT * FROM crodconnect.admins WHERE password = %s"
+            admin = make_db_request(query, (password_field.value,))
 
             view_pb = ft.ProgressBar()
             fback_pb = ft.ProgressBar()
             systemd_pb = ft.ProgressBar()
-
-            view_card = ft.Card(
-                ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Row(
-                                [
-                                    ft.Icon(ft.icons.REMOVE_RED_EYE),
-                                    ft.Text("Обзор", size=20, weight=ft.FontWeight.W_400)
-                                ]
-                            ),
-                            view_pb
-                        ]
-                    ),
-                    padding=15
-                ),
-                width=600
-            )
-
-            fback_card = ft.Card(
-                ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Row(
-                                [
-                                    ft.Icon(ft.icons.FEED),
-                                    ft.Text("Обратная связь", size=20, weight=ft.FontWeight.W_400),
-                                ]
-                            ),
-                            fback_pb,
-                            ft.Container(
-                                ft.Column(
-                                    [
-                                        ft.ListTile(
-                                            leading=ft.Icon(ft.icons.FILTER_1),
-                                            title=ft.Text("20/27")
-                                        ),
-                                        ft.ListTile(
-                                            leading=ft.Icon(ft.icons.FILTER_2),
-                                            title=ft.Text("20/27")
-                                        ),
-                                        ft.ListTile(
-                                            leading=ft.Icon(ft.icons.FILTER_3),
-                                            title=ft.Text("20/27")
-                                        ),
-                                        ft.ListTile(
-                                            leading=ft.Icon(ft.icons.FILTER_4),
-                                            title=ft.Text("20/27")
-                                        ),
-                                        ft.ListTile(
-                                            leading=ft.Icon(ft.icons.FILTER_5),
-                                            title=ft.Text("20/27")
-                                        ),
-
-                                    ],
-                                    spacing=0.5
-                                ),
-                                margin=ft.margin.only(left=-15)
-                            )
-
-                        ]
-                    ),
-                    padding=15
-                ),
-                width=600
-            )
 
             systemd_text = ft.Text(size=16)
             systemd_btn = ft.FilledTonalButton(text="Перезагрузка", icon=ft.icons.RESTART_ALT, on_click=lambda _: change_screen("reboot_menu"), visible=False)
@@ -788,8 +694,6 @@ def main(page: ft.Page):
             col = ft.Column(
                 controls=[
                     ft.Container(ft.Text(get_hello(admin['name'].split()[1]), size=25, weight=ft.FontWeight.W_600), padding=ft.padding.only(left=10)),
-                    # view_card,
-                    # fback_card,
                     systemd_card
                 ]
             )
@@ -852,16 +756,16 @@ def main(page: ft.Page):
                     ]
                 )
             ]
-            loading_text.value = "Загрузка"
-            open_dialog(dialog_loading)
+            dlg_loading.loading_text = "Загрузка"
+            dlg_loading.open()
 
-            query = "SELECT * FROM modules WHERE status = 'active'"
-            admins_list = make_db_request(query, get_many=True)
+            query = "SELECT * FROM crodconnect.modules WHERE status = 'active'"
+            admins_list = make_db_request(query)
             if admins_list is not None:
                 col = ft.Column()
                 for admin in admins_list:
-                    query = "SELECT * FROM teachers WHERE module_id = %s and status = 'active'"
-                    teacher_info = make_db_request(query, (admin['id'],), get_many=False)
+                    query = "SELECT * FROM crodconnect.teachers WHERE module_id = %s and status = 'active'"
+                    teacher_info = make_db_request(query, (admin['id'],))
                     if teacher_info is not None:
                         popup_items = [
                             ft.FilledButton(text='Изменить локацию', icon=ft.icons.LOCATION_ON, on_click=show_qr, data=f"teachers_{teacher_info['pass_phrase']}"),
@@ -920,7 +824,7 @@ def main(page: ft.Page):
                         )
                         col.controls.append(card)
                 page.add(col)
-            close_dialog(dialog_loading)
+                dlg_loading.close()
 
         elif target == "create_mentor":
             new_mentor_name_field.value = None
@@ -958,10 +862,10 @@ def main(page: ft.Page):
                     padding=10
                 )
             ]
-            loading_text.value = "Загрузка"
-            open_dialog(dialog_loading)
-            query = "SELECT * FROM mentors where status != 'removed'"
-            mentors_list = make_db_request(query, get_many=True)
+            dlg_loading.loading_text = "Загрузка"
+            dlg_loading.open()
+            query = "SELECT * FROM crodconnect.mentors where status != 'removed'"
+            mentors_list = make_db_request(query)
             if mentors_list is not None:
                 col = ft.Column()
                 for mentor in mentors_list:
@@ -1005,7 +909,7 @@ def main(page: ft.Page):
                         )
                     )
                 page.add(col)
-                close_dialog(dialog_loading)
+                dlg_loading.close()
 
         elif target == "admins_info":
             page.appbar.actions = [
@@ -1014,10 +918,10 @@ def main(page: ft.Page):
                     padding=10
                 )
             ]
-            loading_text.value = "Загрузка"
-            open_dialog(dialog_loading)
-            query = "SELECT * FROM admins WHERE status != 'removed'"
-            admins_list = make_db_request(query, get_many=True)
+            dlg_loading.loading_text = "Загрузка"
+            dlg_loading.open()
+            query = "SELECT * FROM crodconnect.admins WHERE status != 'removed'"
+            admins_list = make_db_request(query)
             if admins_list is not None:
                 col = ft.Column()
                 for admin in admins_list:
@@ -1061,7 +965,7 @@ def main(page: ft.Page):
                         )
                     )
                 page.add(col)
-            close_dialog(dialog_loading)
+                dlg_loading.close()
 
         elif target == "documents":
             col = ft.Column(
@@ -1109,8 +1013,8 @@ def main(page: ft.Page):
                 )
             ]
 
-            loading_text.value = "Обновляем"
-            open_dialog(dialog_loading)
+            dlg_loading.loading_text = "Обновляем"
+            dlg_loading.open()
 
             col = ft.Column(
                 [
@@ -1162,7 +1066,7 @@ def main(page: ft.Page):
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER
             )
             page.add(col)
-            close_dialog(dialog_loading)
+            dlg_loading.close()
 
         elif target == "app_info":
             col = ft.Column(
@@ -1264,11 +1168,9 @@ def main(page: ft.Page):
         status = data[2]
 
         query = f"UPDATE {target} SET status = %s WHERE pass_phrase = %s"
-        if make_db_request(query, (status, pass_phrase,), put_many=False) is not None:
+        if make_db_request(query, (status, pass_phrase,)) is not None:
             open_sb("Статус изменён", ft.colors.GREEN)
             change_screen(f"{target}_info")
-        else:
-            open_sb("Ошибка БД", ft.colors.RED)
 
     def upload_tables(e):
         if cildren_table_picker.result is not None and cildren_table_picker.result.files is not None:
@@ -1280,13 +1182,13 @@ def main(page: ft.Page):
                 )
             ]
 
-            loading_text.value = "Загружаем файл"
-            open_dialog(dialog_loading)
+            dlg_loading.loading_text = "Загружаем файл"
+            dlg_loading.open()
 
             cildren_table_picker.upload(upload_list)
             time.sleep(2)
 
-            close_dialog(dialog_loading)
+            dlg_loading.close()
             open_sb("Файл загружен", ft.colors.GREEN)
             insert_children_info(f'assets/uploads/{file.name}')
 
@@ -1313,49 +1215,40 @@ def main(page: ft.Page):
                 change_screen("edit_env")
 
             elif action == "remove_modules":
-                loading_text.value = "Удаляем модули"
-                open_dialog(dialog_loading)
+                dlg_loading.loading_text = "Удаляем модули"
+                dlg_loading.open()
 
-                query = "TRUNCATE TABLE modules_records"
-                make_db_request(query, put_many=False)
+                query = "TRUNCATE TABLE crodconnect.modules_records"
+                make_db_request(query)
 
-                query = "TRUNCATE TABLE teachers"
-                make_db_request(query, put_many=False)
+                query = "TRUNCATE TABLE crodconnect.teachers"
+                make_db_request(query)
 
-                query = "TRUNCATE TABLE modules"
-                if make_db_request(query, put_many=False) is not None:
+                query = "TRUNCATE TABLE crodconnect.modules"
+                if make_db_request(query) is not None:
                     open_sb("Учебные модули удалены", ft.colors.GREEN)
-                else:
-                    open_sb("Ошибка БД", ft.colors.RED)
 
                 change_screen("modules_info")
-                close_dialog(dialog_loading)
+                dlg_loading.close()
 
             elif action == "remove_modules_records":
-                loading_text.value = "Удаляем записи"
-                open_dialog(dialog_loading)
+                dlg_loading.loading_text = "Удаляем записи"
+                dlg_loading.open()
 
-                query = "TRUNCATE TABLE modules_records"
-                make_db_request(query, put_many=False)
+                query = "TRUNCATE TABLE crodconnect.modules_records"
+                make_db_request(query)
 
-                query = "UPDATE modules SET seats_real = 0"
-                if make_db_request(query, put_many=False) is not None:
+                query = "UPDATE crodconnect.modules SET seats_real = 0"
+                if make_db_request(query) is not None:
                     open_sb("Записи на модули удалены", ft.colors.GREEN)
-                else:
-                    open_sb("Ошибка БД", ft.colors.RED)
 
                 change_screen("modules_info")
-                close_dialog(dialog_loading)
+                dlg_loading.close()
 
             elif action == "reboot_server":
-                dialog_info_title.value = "Перезагрузка сервера"
-                dialog_info_text.value = "Сервер будет перезагружен через 5 секунд. Если перезагрузка будет удачной, вам придёт сообщение в Telegram"
-                open_dialog(dialog_info)
-
-                time.sleep(10)
-                close_dialog(dialog_info)
-                loading_text.value = "Перезагрузка"
-                open_dialog(dialog_loading)
+                dlg_loading.loading_text = "Перезагрузка"
+                dlg_loading.open()
+                # to-do: перезагрузка сервера
 
         else:
             open_sb("Неверный код", ft.colors.RED)
@@ -1440,13 +1333,14 @@ def main(page: ft.Page):
     )
 
     def login():
-        query = "SELECT * FROM admins WHERE password = %s and status = 'active'"
-        admin_info = make_db_request(query, (password_field.value,), get_many=True)
-        if admin_info:
-            password_field.data = admin_info
-            change_screen("main")
-        else:
-            open_sb("Ошибка доступа", ft.colors.RED)
+        query = "SELECT * FROM crodconnect.admins WHERE password = %s and status = 'active'"
+        admin_info = make_db_request(query, (password_field.value,))
+        if admin_info is not None:
+            if admin_info:
+                password_field.data = admin_info
+                change_screen("main")
+            else:
+                open_sb("Ошибка доступа", ft.colors.RED)
 
         page.update()
 
@@ -1456,7 +1350,7 @@ def main(page: ft.Page):
         # bgcolor=ft.colors.SURFACE_VARIANT
     )
 
-    module_traffic_col = ft.Column(width=600)
+    module_traffic_col = ft.Column(width=600, scroll=ft.ScrollMode.HIDDEN)
 
     password_field = ft.TextField(
         label="Код доступа", text_align=ft.TextAlign.CENTER,
@@ -1508,23 +1402,6 @@ def main(page: ft.Page):
         ]
     )
 
-    loading_text = ft.Text("Загрузка", size=20, weight=ft.FontWeight.W_400)
-    dialog_loading = ft.AlertDialog(
-        # Диалог с кольцом загрузки
-
-        # title=ft.Text(size=20),
-        modal=True,
-        content=ft.Column(
-            controls=[
-                ft.Column([loading_text, ft.ProgressBar()], alignment=ft.MainAxisAlignment.CENTER),
-            ],
-            alignment=ft.MainAxisAlignment.CENTER,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            width=400,
-            height=50
-        )
-    )
-
     env_field = ft.TextField(
         multiline=True
     )
@@ -1535,10 +1412,13 @@ def main(page: ft.Page):
         with open(env_path, "w") as f:
             f.write(env_data)
 
-        dialog_info_title.value = "Конфигурация"
-        dialog_info_text.value = "Конфигурационный файл обновлён. Чтобы изменения вступили в силу, перезагрузите необходимые элементы системы"
+        dlg_info.title = "Конфигурация"
+        dlg_info.content = ft.Text(
+            "Конфигурационный файл обновлён. Чтобы изменения вступили в силу, перезагрузите необходимые элементы системы.",
+            width=600, size=16, weight=ft.FontWeight.W_200
+        )
         change_screen("reboot_menu")
-        open_dialog(dialog_info)
+        dlg_info.open()
 
     def open_dialog(dialog: ft.AlertDialog):
         page.dialog = dialog
@@ -1572,18 +1452,17 @@ def main(page: ft.Page):
             remaining_children_traffic.remove(e.control.data)
         else:
             remaining_children_traffic.append(e.control.data)
-        # print(remaining_children_traffic)
 
     def update_modulecheck(mentor_id, module_name):
-        query = "SELECT name from mentors WHERE id = %s"
-        mentor_name = make_db_request(query, (mentor_id,), get_many=False)['name']
+        query = "SELECT name from crodconnect.mentors WHERE id = %s"
+        mentor_name = make_db_request(query, (mentor_id,))['name']
 
         if remaining_children_traffic:
             text = ""
             module_traffic_col.controls[2].controls.clear()
             for child_id in remaining_children_traffic:
-                query = "SELECT * FROM children WHERE id = %s"
-                child = make_db_request(query, (child_id,), get_many=False)
+                query = "SELECT * FROM crodconnect.children WHERE id = %s"
+                child = make_db_request(query, (child_id,))
                 module_traffic_col.controls[2].controls.append(
                     ft.Container(
                         ft.Row(
@@ -1605,17 +1484,20 @@ def main(page: ft.Page):
                            f"{text}" \
                            f"\nОтметил: *{mentor_name}*"
 
-
         else:
             page.controls.clear()
-            dialog_info_title.value = "Посещаемость"
-            dialog_info_text.value = "Все дети на месте, спасибо! Можно возвращаться в Telegram"
-            open_dialog(dialog_info)
+            dlg_info.title = "Посещаемость"
+            dlg_info.content = ft.Text(
+                "Все дети на месте, спасибо! Можно возвращаться в Telegram.",
+                width=600, size=16, weight=ft.FontWeight.W_200
+            )
+            dlg_info.open(action_btn_visible=False)
 
             message_text = f"*Посещаемость*" \
                            f"\n\nМодуль: *{module_name}*" \
                            f"\nСтатус: *все дети на месте ✅*" \
                            f"\n\nОтметил: *{mentor_name}*"
+
         send_telegam_message(os.getenv('ID_GROUP_MAIN'), message_text)
         page.update()
 
@@ -1651,8 +1533,9 @@ def main(page: ft.Page):
 
     def get_showqr(target: str, value: str = ""):
         page.appbar = None
-        loading_text.value = "Загрузка"
-        open_dialog(dialog_loading)
+        page.scroll = ft.ScrollMode.HIDDEN
+        dlg_loading.loading_text = "Загрузка"
+        dlg_loading.open()
 
         titles = {
             'admins': "Администрация",
@@ -1661,7 +1544,7 @@ def main(page: ft.Page):
         }
 
         if target == "children":
-            query = f"SELECT * FROM children WHERE group_num = %s AND telegram_id is null and status = 'active'"
+            query = f"SELECT * FROM crodconnect.children WHERE group_num = %s AND telegram_id is null and status = 'active'"
             params = (value,)
             group_title = f"Группа №{value}"
         else:
@@ -1669,10 +1552,10 @@ def main(page: ft.Page):
             params = ()
             group_title = f"{titles[target]}"
 
-        users_list = make_db_request(query, params, get_many=True)
+        users_list = make_db_request(query, params)
         if users_list is not None:
             if users_list:
-                qr_screen_col = ft.Column(width=600)
+                qr_screen_col = ft.Column(width=600, scroll=ft.ScrollMode.HIDDEN)
                 users_col = ft.Column(width=600)
 
                 for user in users_list:
@@ -1701,29 +1584,29 @@ def main(page: ft.Page):
                     users_col
                 ]
                 page.add(qr_screen_col)
-                close_dialog(dialog_loading)
+                dlg_loading.close()
             else:
-                dialog_info_title.value = "QR-коды"
-                dialog_info_text.value = f"В группе «{group_title}» все пользователи зарегистрированы"
-                open_dialog(dialog_info)
-        else:
-            dialog_info_title.value = "Ошибка"
-            dialog_info_text.value = f"При получении данных возникла ошибка, попробуйте ещё раз"
-            open_dialog(dialog_info)
+                dlg_info.title = "QR-коды"
+                dlg_info.content = ft.Text(
+                    f"Все пользователи в группе «{group_title}» зарегистрированы!",
+                    width=600, size=16, weight=ft.FontWeight.W_200
+                )
+                dlg_info.open(action_btn_visible=False)
 
     def get_modulecheck(mentor_id: str, module_id: str):
+        page.scroll = ft.ScrollMode.HIDDEN
         page.appbar = None
-        loading_text.value = "Загрузка"
-        open_dialog(dialog_loading)
+        dlg_loading.loading_text = "Загрузка"
+        dlg_loading.open()
 
-        query = "SELECT name FROM modules WHERE id = %s"
-        module_info = make_db_request(query, (module_id,), get_many=False)
+        query = "SELECT name FROM crodconnect.modules WHERE id = %s"
+        module_info = make_db_request(query, (module_id,))
 
-        query = "SELECT * FROM children WHERE id IN (SELECT child_id FROM modules_records WHERE module_id = %s)"
-        children_list = make_db_request(query, (module_id,), get_many=True)
+        query = "SELECT * FROM crodconnect.children WHERE id IN (SELECT child_id FROM crodconnect.modules_records WHERE module_id = %s)"
+        children_list = make_db_request(query, (module_id,))
         if children_list is not None:
 
-            children_list_col = ft.Column(width=600)
+            children_list_col = ft.Column(width=600, scroll=ft.ScrollMode.HIDDEN)
             children_list.sort(key=lambda el: el['name'])
             for child in children_list:
                 remaining_children_traffic.append(child['id'])
@@ -1757,9 +1640,7 @@ def main(page: ft.Page):
                 )
             ]
             page.add(module_traffic_col)
-        else:
-            pass
-        close_dialog(dialog_loading)
+            dlg_loading.close()
 
     page.drawer = ft.NavigationDrawer(
         controls=[
@@ -1876,7 +1757,7 @@ def main(page: ft.Page):
         page.window_height = 768
         page.route = "/"
         # page.route = "/modulecheck?mentor_id=26&module_id=1&signature=265013c29e25b5c1a7b3782fcefac903c473d53c4d55b593e8b8d35990fd43db"
-        # page.route = "/showqr?target=children&value=1"
+        # page.route = "/showqr?target=children&value=3&signature=e4d0bb16a50c20ca7ce53b0d753f2f7570ea2990750fd76ae62daa6030d1b27a"
 
     # Точка входа
     url = urlparse(page.route)
@@ -1906,21 +1787,24 @@ def main(page: ft.Page):
 
     else:
         page.appbar = None
-        err_text = "При запуске сервисов возникли ошибки\n\n" + "\n\n".join(
-            [f"{service[0]}: {service[1]['msg']}" for service in [serivce for serivce in startup.items()] if not service[1]['status']]) + "\n\nОбратитесь к администратору"
+        err_text = "При получении данных возникли следующие ошибки\n\n" + "\n\n".join(
+            [f"{service[0]}: {service[1]['msg']}" for service in [serivce for serivce in startup.items()] if not service[1]['status']]) + "\n\nОбратитесь к администратору."
         send_telegam_message(
             tID=os.getenv('ID_GROUP_ERRORS'),
             message_text=err_text
         )
-        dialog_info_title.value = "Запуск сервисов"
-        dialog_info_text.value = err_text
-        open_dialog(dialog_info)
+        dlg_info.title = "Ошибка подключения"
+        dlg_info.content = ft.Text(
+            err_text,
+            width=600, size=16, weight=ft.FontWeight.W_200
+        )
+        dlg_info.open(action_btn_visible=False)
     page.update()
 
 
 if __name__ == "__main__":
     if platform.system() == "Windows":
-        os.environ['DEBUG'] = "0"
+        os.environ['DEBUG'] = "1"
     if is_debug():
         ft.app(
             target=main,

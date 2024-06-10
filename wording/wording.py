@@ -1,10 +1,7 @@
 import math
 import os
-import platform
-import shutil
 
 import docx
-# import groupdocs_conversion_cloud
 import convertapi
 import qrcode
 from docx.enum.table import WD_ALIGN_VERTICAL
@@ -13,7 +10,12 @@ from docx.shared import Pt, Inches
 from docxtpl import DocxTemplate
 from datetime import datetime
 from dotenv import load_dotenv
+from logging import basicConfig, INFO, info, error
 
+basicConfig(
+    level=INFO,
+    format="%(asctime)s %(levelname)s %(message)s"
+)
 current_directory = os.path.dirname(os.path.abspath(__file__))
 parent_directory = os.path.dirname(current_directory)
 
@@ -37,7 +39,10 @@ def insert_metrics(filepath, group_num):
 
 
 def convert_to_pdf(filepath: str):
+    info(f"{filepath}: started converting to pdf")
+
     convertapi.api_secret = os.getenv('CONVERT_SECRET')
+
     docx_file = f"{current_directory}/generated/{filepath}.docx"
 
     converted = convertapi.convert(
@@ -47,7 +52,10 @@ def convert_to_pdf(filepath: str):
         },
         from_format='doc'
     )
+    info(f"{filepath}: converted successfully!")
+
     converted.save_files(f"{current_directory}/generated")
+    info(f"{filepath}: file save in /generated")
 
     if os.path.exists(docx_file):
         os.remove(docx_file)
@@ -55,6 +63,8 @@ def convert_to_pdf(filepath: str):
 
 def get_grouplist(group_list: list, group_num: int):
     filename = f"grouplist_{group_num}_{datetime.now().date().strftime('%d%m%Y')}"
+    info(f"{filename}: creating file")
+
     data = []
     for child in group_list:
         data.append(
@@ -82,8 +92,13 @@ def get_grouplist(group_list: list, group_num: int):
             if j != 2:  # не выравнивается ячейка с особенностями
                 cell.paragraphs[0].alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
                 cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+
     doc.save(f"{current_directory}/generated/{filename}.docx")
+    info(f"{filename}: saved in /generated")
+
     insert_metrics(filename, group_num)
+    info(f"{filename}: metrics inserted")
+
     convert_to_pdf(filename)
 
     return filename
@@ -239,6 +254,3 @@ def get_module_parts(children_list: list, module_info: list, teacher_info: list)
     convert_to_pdf(filename)
 
     return filename
-
-
-

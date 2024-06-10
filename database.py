@@ -57,6 +57,9 @@ class MySQL:
     def reconnect(self):
         self.connection.reconnect()
 
+    def disconnect(self):
+        self.connection.disconnect()
+
 
 class RedisTable:
     def __init__(self, host, port, password):
@@ -88,3 +91,6 @@ class RedisTable:
 
     def get(self, index):
         return self.connection.get(index)
+
+    def set(self, sign, index):
+        self.connection.set(index, sign, 20)

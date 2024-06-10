@@ -24,9 +24,6 @@ builder_children.button(text="Образовательные модули 💡",
 builder_children.adjust(2)
 
 builder_admins = keyboard.InlineKeyboardBuilder()
-builder_admins.button(text="Документы 💬", callback_data=AdminsCallbackFactory(action="docs"))
 builder_admins.button(text="Списки модулей", callback_data=AdminsCallbackFactory(action="modules_list"))
 builder_admins.button(text="Открыть Connect 💡", url=f"{base_crod_url}/connect")
-# to-do
-# выбор: генерация файла или открыть через connect
 builder_admins.adjust(2)
