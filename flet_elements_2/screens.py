@@ -137,18 +137,6 @@ screens = {
         },
         'scroll_mode': base_scroll_mode
     },
-    'stream_settings': {
-        'appbar': {
-            'visible': True,
-            'leading': {
-                'icon': menu_icon,
-                'action': "drawer",
-                'target': None
-            },
-            'title': "Документы"
-        },
-        'scroll_mode': base_scroll_mode
-    },
     'reboot_menu': {
         'appbar': {
             'visible': True,
@@ -172,5 +160,17 @@ screens = {
             'title': "О приложении"
         },
         'scroll_mode': None
+    },
+    'edit_env': {
+        'appbar': {
+            'visible': True,
+            'leading': {
+                'icon': menu_icon,
+                'action': "drawer",
+                'target': None
+            },
+            'title': "Конфигурация"
+        },
+        'scroll_mode': ScrollMode.HIDDEN
     },
 }

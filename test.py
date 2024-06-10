@@ -1,66 +1,50 @@
-import asyncio
-import datetime
-import logging
-import os
+import hmac
+import hashlib
 import platform
-import re
+import urllib.parse
 import time
+import os
 
-import requests
-from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters.command import Command, CommandStart, CommandObject
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import StatesGroup, State
-from aiogram.types import Message
-from aiogram.utils import markdown, keyboard
-from aiogram.methods import DeleteWebhook
-from aiogram.utils.markdown import link
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
+import redis
 from dotenv import load_dotenv
 
-from bot_elements.callback_factory import TeachersCallbackFactory, MentorsCallbackFactory, ChildrenCallbackFactory, RadioRequestCallbackFactory, SelectModuleCallbackFactory, AdminsCallbackFactory, \
-    RecordModuleToChildCallbackFactory, FeedbackMarkCallbackFactory
-from bot_elements.database import DataBase
-from bot_elements.lexicon import lexicon, base_crod_url
-from bot_elements.keyboards import kb_hello, kb_main, tasker_kb, reboot_bot_kb, radio_kb, check_apply_to_channel_kb
-from bot_elements.states import Radio, Feedback
-from functions import load_config_file, update_config_file
-from wording.wording import get_grouplist, get_feedback
+if platform.system() == "Windows":
+    env_path = r"D:\CROD_MEDIA\.env"
+else:
+    env_path = r"/root/crod/.env"
+load_dotenv(dotenv_path=env_path)
 
-load_dotenv()
+url = 'https://crodconnect.ru/connect/modulecheck?mentor_id=26&module_id=1'
+#
+def generate_signature(url, secret_key):
+    hmac_obj = hmac.new(secret_key.encode(), url.encode(), hashlib.sha256)
+    signature = hmac_obj.hexdigest()
+    return signature
 
-bot = Bot(token=os.getenv('BOT_TOKEN'), parse_mode="html")
-dp = Dispatcher()
+def generate_signed_url(url, secret_key):
+    # Добавляем временную метку к URL
+    timestamp = int(time.time())
+    url_with_timestamp = f"{url}&timestamp={timestamp}"
 
-async def check():
-    fl = False
-    while not fl:
-        print('getting')
-        try:
-            code = requests.get('https://dl.spbstu.ru').status_code
-        except requests.exceptions.ConnectTimeout:
-            code = 'Timeout'
-        print('ok')
-        print(code)
-        if code == 200:
-            await bot.send_message(
-                chat_id=2048822830,
-                text="Политех поднялся!!!!!!!!!!!!!!!!!1"
-            )
-        else:
-            await bot.send_message(
-                chat_id=2048822830,
-                text="Политех откисает в канаве со статусом: " + str(code)
-            )
+    # Генерируем подпись для URL с временной меткой
+    signature = generate_signature(url_with_timestamp, secret_key)
 
-        time.sleep(10)
+    # Добавляем подпись к URL
+    signed_url = f"{url}&signature={signature}"
+    return signature
+
+signature = generate_signed_url(url, os.getenv('SECRET_KEY'))
+print("Signed URL:", signature)
 
 
-async def main():
-    await bot(DeleteWebhook(drop_pending_updates=True))
-    await dp.start_polling(bot)
+redis_client = redis.StrictRedis(
+    host=os.getenv('DB_HOST'),  # Замените на IP-адрес вашего сервера
+    port=os.getenv('REDIS_PORT'),
+    password=os.getenv('REDIS_PASSWORD'),  # Установите пароль, если вы его настроили
+    decode_responses=True
+)
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+redis_client.set('261', signature, 20)
+
+

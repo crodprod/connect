@@ -19,6 +19,7 @@ from pypdf import PdfMerger
 from transliterate import translit
 
 import wording.wording
+from flet_elements_2.database import MySQL, RedisTable
 from flet_elements_2.functions import remove_folder_content, get_hello, get_system_list
 from flet_elements_2.modules_locations import locations
 from flet_elements_2.screens import screens
@@ -50,37 +51,19 @@ startup = {
     }
 }
 
-try:
-    logging.info("Redis: connecting...")
-    redis = redis.StrictRedis(
-        host=os.getenv('DB_HOST'),
-        port=os.getenv('REDIS_PORT'),
-        password=os.getenv('REDIS_PASSWORD'),
-        decode_responses=True
-    )
-    redis.exists("0")
-    logging.info("Redis: connected!")
-except Exception as e:
-    logging.error(f"Redis: {e}")
-    startup['redis']['status'] = False
-    startup['redis']['msg'] = str(e)
+db = MySQL(
+    host=os.getenv('DB_HOST'),
+    port=3310,
+    user=os.getenv('DB_USER'),
+    password=os.getenv('DB_PASSWORD'),
+    db_name=os.getenv('DB_NAME')
+)
 
-try:
-    logging.info("MySQL: connecting...")
-    connection = connect(
-        host=os.getenv('DB_HOST'),
-        user=os.getenv('DB_USER'),
-        password=os.getenv('DB_PASSWORD'),
-        database=os.getenv('DB_NAME'),
-        port=3310
-    )
-    cur = connection.cursor(dictionary=True)
-    connection.autocommit = True
-    logging.info("MySQL: connected!")
-except Exception as e:
-    logging.error(f"MySQL: {e}")
-    startup['mysql']['status'] = False
-    startup['mysql']['msg'] = str(e)
+redis = RedisTable(
+    host=os.getenv('DB_HOST'),
+    port=os.getenv('REDIS_PORT'),
+    password=os.getenv('REDIS_PASSWORD')
+)
 
 
 def url_sign_check(sign: str, index: str):
@@ -88,7 +71,6 @@ def url_sign_check(sign: str, index: str):
     try:
         response = 0
         if redis.exists(index):
-            print(redis.get(index), sign)
             if redis.get(index) == sign:
                 response = 1
             else:
@@ -114,47 +96,45 @@ def main(page: ft.Page):
     page.fonts = {
         "Geologica": "fonts/Geologica.ttf",
     }
-    # page.padding = 0
 
     remaining_children_traffic = []
 
-    def make_db_request(sql_query: str, params: tuple = (), get_many: bool = None, put_many: bool = None):
-        # обработка sql-запросов
+    db.connect()
+    redis.connect()
 
-        logging.info(f"MySQL: requesting (query: {sql_query}, params: {params})")
-        if connection is not None:
-            logging.info(f"MySQL: request ok")
-            try:
-                data = True
-                if get_many is not None:
-                    cur.execute(sql_query, params)
-                    if get_many:
-                        data = cur.fetchall()
-                    elif not get_many:
-                        data = cur.fetchone()
-                elif put_many is not None:
-                    if put_many:
-                        cur.executemany(sql_query, params)
-                    elif not put_many:
-                        cur.execute(sql_query, params)
-                    data = True
-                connection.commit()
-                return data
-            except Exception as e:
-                logging.error(f'MySQL: {e}')
-                send_telegam_message(
-                    tID=os.getenv('ID_GROUP_ERRORS'),
-                    message_text="*Ошибка при выполнение запроса к БД в Коннекте*"
-                                 f"\n\n{e}"
-                )
-                return None
+    if db.result['status'] == "error":
+        startup['mysql']['status'] = False
+        startup['mysql']['msg'] = db.result['message']
+
+    if redis.result['status'] == "error":
+        startup['redis']['status'] = False
+        startup['redis']['msg'] = redis.result['message']
+
+    def make_db_request(sql_query: str, params: tuple = (), get_many: bool = None, put_many: bool = None):
+
+        logging.info(f"Executing: {sql_query} ({params})")
+        db.execute(sql_query, params)
+        logging.info(db.result)
+        if db.result['status'] == "ok":
+            return db.data
         else:
-            dialog_info_title.value = "Ошибка БД"
-            dialog_info_text.value = "Возникла ошибка при подключении к базе данных, обратитесь к администратору"
+            pass
+
+    def is_telegrammed(target: str = None):
+
+        messages = {
+            None: "Не удалось отправить сообщение, так как вы не зарегистрированы в Telegram-боте. Попробуйте ещё раз после регистрации",
+            "confirm": "Не удалось отправить код подтверждения, так как вы не зарегистрированы в Telegram-боте. Попробуйте ещё раз после регистрации",
+            "docs": "Не удалось отправить документ, так как вы не зарегистрированы в Telegram-боте. Попробуйте выполнить запрос ещё раз после регистрации"
+        }
+
+        if password_field.data['telegram_id'] is None:
+            dialog_info_title.value = "Ошибка отправки"
+            dialog_info_text.value = messages[target]
+            page.dialog = dialog_info
             open_dialog(dialog_info)
-            logging.error(f'MySQL: not connected')
-            open_dialog(dialog_info)
-            return None
+            return False
+        return True
 
     def raise_error(location, error_message: str, screen: str):
         if location == dialog_loading:
@@ -414,7 +394,6 @@ def main(page: ft.Page):
 
     def validate(target: str):
         if target == "mentor":
-            # print(len(new_mentor_name_field.value.strip().split(" ")), new_mentor_group_dd.value)
             if len(new_mentor_name_field.value.strip().split(" ")) in [2, 3] and new_mentor_group_dd.value is not None:
                 btn_add_mentor.disabled = False
             else:
@@ -447,9 +426,7 @@ def main(page: ft.Page):
         query = "SELECT telegram_id from admins WHERE password = %s"
         response = make_db_request(query, (password_field.value,), get_many=False)
 
-        if response['telegram_id'] is None:
-            open_sb("Вы не зарегистрированы в боте", ft.colors.RED)
-        else:
+        if is_telegrammed('docs'):
             caption = "*Генерация документов*\n\n"
             if doctype == "groups":
                 merger = PdfMerger()
@@ -672,13 +649,14 @@ def main(page: ft.Page):
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER
                 ),
             ),
-            width=600,
-            # height=100
+            width=600
         )
 
         return card
 
     def change_screen(target: str):
+        logging.info(f"Changing screen to: {target}")
+
         page.controls.clear()
         page.appbar.visible = False
         page.appbar.actions.clear()
@@ -812,7 +790,6 @@ def main(page: ft.Page):
             page.update()
 
             systemd_list = get_system_list()
-            print(systemd_list)
             time.sleep(2)
             if systemd_list:
                 systemd_card.color = ft.colors.RED
@@ -826,6 +803,23 @@ def main(page: ft.Page):
             systemd_pb.visible = False
             fback_pb.visible = False
             page.update()
+
+        elif target == "edit_env":
+            with open(env_path, "r") as f:
+                env_data = f.readlines()
+            env_field.value = "".join(env_data)
+
+            col = ft.Column(
+                controls=[
+                    env_field,
+                    ft.FilledTonalButton(
+                        text="Сохранить",
+                        icon=ft.icons.SAVE_ALT,
+                        on_click=update_env
+                    )
+                ]
+            )
+            page.add(col)
 
         elif target == "modules_info":
             page.appbar.actions = [
@@ -1306,10 +1300,9 @@ def main(page: ft.Page):
                     file_type=ft.FilePickerFileType.CUSTOM,
                     allowed_extensions=['xls', 'xlsx']
                 )
-                # insert_children_info(r"C:\Users\Lario\OneDrive\Рабочий стол\children.xlsx")
 
             elif action == "edit_stream":
-                pass
+                change_screen("edit_env")
 
             elif action == "remove_modules":
                 loading_text.value = "Удаляем модули"
@@ -1361,12 +1354,13 @@ def main(page: ft.Page):
         confirmation_code_field.value = ""
 
     def open_confirmation(action: str):
+
         actions_descrition = {
             'upload_children': {
                 'title': "Загрузка таблицы"
             },
             'edit_stream': {
-                'title': "Параметры смены"
+                'title': "Конфигурация"
             },
             'remove_modules': {
                 'title': "Удаление модулей"
@@ -1379,16 +1373,17 @@ def main(page: ft.Page):
             }
         }
 
-        dialog_confirmation.title.controls[0].content.value = actions_descrition[action]['title']
-        confirmation_code = os.urandom(3).hex()
-        dialog_confirmation.data = [confirmation_code, action]
-        open_dialog(dialog_confirmation)
-        send_telegam_message(
-            password_field.data['telegram_id'],
-            "*Код подтверждения*"
-            f"\n\nДля подтверждения действия в ЦРОД.Коннект введите `{confirmation_code}`"
-        )
-        # dialog_confirmation.content.controls[0].value = actions_descrition[action]['hint_text']
+        if is_telegrammed('confirm'):
+            dialog_confirmation.title.controls[0].content.value = actions_descrition[action]['title']
+            confirmation_code = os.urandom(3).hex()
+            dialog_confirmation.data = [confirmation_code, action]
+            open_dialog(dialog_confirmation)
+
+            send_telegam_message(
+                password_field.data['telegram_id'],
+                "*Код подтверждения*"
+                f"\n\nДля подтверждения действия в ЦРОД.Коннект введите `{confirmation_code}`"
+            )
 
     confirmation_code_field = ft.TextField(hint_text="Код подтверждения", on_submit=lambda _: check_confirmation())
 
@@ -1425,14 +1420,7 @@ def main(page: ft.Page):
                 ft.IconButton(ft.icons.CLOSE_ROUNDED, on_click=lambda _: close_dialog(dialog_confirmation))
             ]
         ),
-        content=ft.Column(
-            [
-                ft.Text("Введите код подтверждения, который отправлен вам в Telegram", size=18, weight=ft.FontWeight.W_200),
-                confirmation_code_field
-            ],
-            width=600,
-            height=180
-        ),
+        content=confirmation_code_field,
         actions_alignment=ft.MainAxisAlignment.END,
         actions=[
             ft.FilledTonalButton(
@@ -1444,20 +1432,15 @@ def main(page: ft.Page):
     )
 
     def login():
-        # loading_text.value = "Загрузка"
-        # open_dialog(dialog_loading)
         query = "SELECT * FROM admins WHERE password = %s and status = 'active'"
         admin_info = make_db_request(query, (password_field.value,), get_many=True)
-        if admin_info is not None:
-            if admin_info:
-                password_field.data = admin_info[0]
-                change_screen("main")
-            else:
-                open_sb("Ошибка доступа", ft.colors.RED)
-        # close_dialog(dialog_loading)
-        page.update()
+        if admin_info:
+            password_field.data = admin_info
+            change_screen("main")
+        else:
+            open_sb("Ошибка доступа", ft.colors.RED)
 
-    # элементы интерфейса
+        page.update()
 
     page.appbar = ft.AppBar(
         center_title=False,
@@ -1466,169 +1449,6 @@ def main(page: ft.Page):
     )
 
     module_traffic_col = ft.Column(width=600)
-
-    # main_menu_col = ft.Column(
-    #     controls=[
-    #         get_menu_card(
-    #             title=menu_tabs_config[0]['title'],
-    #             subtitle=None,
-    #             icon=menu_tabs_config[0]['icon'],
-    #             target_screen="children",
-    #             height=80
-    #         ),
-    #         get_menu_card(
-    #             title=menu_tabs_config[1]['title'],
-    #             subtitle=None,
-    #             icon=menu_tabs_config[1]['icon'],
-    #             target_screen="modules",
-    #             height=80
-    #         ),
-    #         get_menu_card(
-    #             title=menu_tabs_config[2]['title'],
-    #             subtitle=None,
-    #             icon=menu_tabs_config[2]['icon'],
-    #             target_screen="mentors",
-    #             height=80
-    #         ),
-    #         get_menu_card(
-    #             title=menu_tabs_config[3]['title'],
-    #             subtitle=None,
-    #             icon=menu_tabs_config[3]['icon'],
-    #             target_screen="docs",
-    #             height=80
-    #         ),
-    #         get_menu_card(
-    #             title=menu_tabs_config[4]['title'],
-    #             subtitle=None,
-    #             icon=menu_tabs_config[4]['icon'],
-    #             target_screen="settings",
-    #             height=80
-    #         )
-    #     ],
-    #     horizontal_alignment=ft.CrossAxisAlignment.START,
-    # )
-
-    settings_col = ft.Column(
-        controls=[
-            ft.Row([ft.Text("Телеграм-бот", size=22)], alignment=ft.MainAxisAlignment.CENTER),
-            # ft.Card(
-            #     ft.Container(
-            #         content=ft.Column(
-            #             [
-            #                 ft.Text("Данные о детях", size=20, weight=ft.FontWeight.W_500),
-            #                 ft.Container(
-            #                     ft.Text("Загрузка таблицы с данными о детях", size=16),
-            #                     padding=ft.padding.only(top=-10)
-            #                 ),
-            #                 ft.Row(
-            #                     [
-            #                         ft.ElevatedButton("Загрузить...", icon=ft.icons.UPLOAD_FILE),
-            #                         ft.FilledTonalButton("Шаблон", icon=ft.icons.DOWNLOAD)
-            #                     ]
-            #                 )
-            #             ]
-            #         ),
-            #         padding=15
-            #     ),
-            #     elevation=10,
-            #     width=600,
-            # ),
-            ft.Card(
-                ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Text("Токен", size=20, weight=ft.FontWeight.W_500),
-                            ft.Container(
-                                ft.Text("Токен для работы телеграм-бота", size=16),
-                                padding=ft.padding.only(top=-10)
-                            ),
-                            ft.ElevatedButton("Изменить", icon=ft.icons.EDIT)
-                        ]
-                    ),
-                    padding=15
-                ),
-                elevation=10,
-                width=600,
-            ),
-            ft.Card(
-                ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Text("Ссылка на канал", size=20, weight=ft.FontWeight.W_500),
-                            ft.Container(
-                                ft.Text("Ссылка на канал ЦРОДа в телеграмме", size=16),
-                                padding=ft.padding.only(top=-10)
-                            ),
-                            ft.ElevatedButton("Изменить", icon=ft.icons.EDIT)
-                        ]
-                    ),
-                    padding=15
-                ),
-                elevation=10,
-                width=600,
-            ),
-            ft.Row([ft.Text("Обратная связь", size=22)], alignment=ft.MainAxisAlignment.CENTER),
-            ft.Card(
-                ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Text("Начало сбора", size=20, weight=ft.FontWeight.W_500),
-                            ft.Container(
-                                ft.Text("Время, в которое откроется доступ к обратной связи", size=16),
-                                padding=ft.padding.only(top=-10)
-                            ),
-                            ft.ElevatedButton("18:00", icon=ft.icons.TIMER)
-                        ]
-                    ),
-                    padding=15
-                ),
-                elevation=10,
-                width=600,
-            ),
-            ft.Card(
-                ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Text("Окончание сбора", size=20, weight=ft.FontWeight.W_500),
-                            ft.Container(
-                                ft.Text("Время, в которое закроется доступ к обратной связи", size=16),
-                                padding=ft.padding.only(top=-10)
-                            ),
-                            ft.ElevatedButton("20:30", icon=ft.icons.TIMER)
-                        ]
-                    ),
-                    padding=15
-                ),
-                elevation=10,
-                width=600,
-            ),
-            ft.Row([ft.Text("Образовательные модули", size=22)], alignment=ft.MainAxisAlignment.CENTER),
-            ft.Card(
-                ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Text("Количество", size=20, weight=ft.FontWeight.W_500),
-                            ft.Container(
-                                ft.Text("Количество модулей, на которое должен записаться ребёнок", size=16),
-                                padding=ft.padding.only(top=-10)
-                            ),
-                            ft.Row(
-                                [
-                                    ft.IconButton(ft.icons.REMOVE),
-                                    ft.Text("1", size=18),
-                                    ft.IconButton(ft.icons.ADD)
-                                ]
-                            )
-                        ]
-                    ),
-                    padding=15
-                ),
-                elevation=10,
-                width=600,
-            ),
-        ],
-        horizontal_alignment=ft.CrossAxisAlignment.CENTER
-    )
 
     password_field = ft.TextField(
         label="Код доступа", text_align=ft.TextAlign.CENTER,
@@ -1660,12 +1480,9 @@ def main(page: ft.Page):
     dialog_info_title = ft.Text(size=20, weight=ft.FontWeight.W_400)
     dialog_info = ft.AlertDialog(
         modal=True,
-        title=ft.Row(
-            [
-                ft.Container(dialog_info_title, expand=True),
-                ft.IconButton(ft.icons.CLOSE_ROUNDED, on_click=lambda _: close_dialog(dialog_info))
-            ]
-        ),
+        title=dialog_info_title,
+        actions_alignment=ft.MainAxisAlignment.END,
+        actions=[ft.TextButton("OK", on_click=lambda _: close_dialog(dialog_info))],
         content=dialog_info_text
     )
 
@@ -1700,7 +1517,21 @@ def main(page: ft.Page):
         )
     )
 
+    env_field = ft.TextField(
+        multiline=True
+    )
+
     # Функции
+    def update_env(e: ft.ControlEvent):
+        env_data = env_field.value
+        with open(env_path, "w") as f:
+            f.write(env_data)
+
+        dialog_info_title.value = "Конфигурация"
+        dialog_info_text.value = "Конфигурационный файл обновлён. Чтобы изменения вступили в силу, перезагрузите необходимые элементы системы"
+        change_screen("reboot_menu")
+        open_dialog(dialog_info)
+
     def open_dialog(dialog: ft.AlertDialog):
         page.dialog = dialog
         dialog.open = True
@@ -1993,42 +1824,6 @@ def main(page: ft.Page):
                 leading=ft.Icon(ft.icons.DOCUMENT_SCANNER),
                 data={'sec': "documents", 'act': "documents"},
                 on_click=drawer_element_selected),
-            # ft.ExpansionTile(
-            #     title=ft.Text("Документы"),
-            #     # subtitle=ft.Text("Trailing expansion arrow icon"),
-            #     leading=ft.Icon(ft.icons.TEXT_SNIPPET),
-            #
-            #     controls=[
-            #         ft.ListTile(
-            #             title=ft.Text("Списки групп"),
-            #             subtitle=ft.Text("Таблицы с особенностями детей и контактами родителей"),
-            #             leading=ft.Icon(ft.icons.VIEW_LIST),
-            #             data={'sec': "documents", 'act': "groups_lists"},
-            #             on_click=drawer_element_selected
-            #         ),
-            #         ft.ListTile(
-            #             title=ft.Text("QR-коды"),
-            #             subtitle=ft.Text("Таблицы с QR-кодами для групп, воспитателей и преподавателей"),
-            #             leading=ft.Icon(ft.icons.QR_CODE_2),
-            #             data={'sec': "documents", 'act': "qr_codes_lists"},
-            #             on_click=drawer_element_selected
-            #         ),
-            #         ft.ListTile(
-            #             title=ft.Text("Списки модулей"),
-            #             subtitle=ft.Text("Распределение детей по учебным модулям"),
-            #             leading=ft.Icon(ft.icons.GROUPS),
-            #             data={'sec': "documents", 'act': "modules_lists"},
-            #             on_click=drawer_element_selected
-            #         ),
-            #         ft.ListTile(
-            #             title=ft.Text("Навигация"),
-            #             subtitle=ft.Text("Распределение модулей по аудиториям"),
-            #             leading=ft.Icon(ft.icons.LOCATION_ON),
-            #             data={'sec': "documents", 'act': "module_navigation"},
-            #             on_click=drawer_element_selected
-            #         ),
-            #     ],
-            # ),
             ft.ExpansionTile(
                 title=ft.Text("Настройки"),
                 # subtitle=ft.Text("Trailing expansion arrow icon"),
@@ -2036,8 +1831,8 @@ def main(page: ft.Page):
 
                 controls=[
                     ft.ListTile(
-                        title=ft.Text("Параметры смены"),
-                        subtitle=ft.Text("Изменение параметров текущей смены или потока"),
+                        title=ft.Text("Конфигурация"),
+                        subtitle=ft.Text("Изменение .env файла"),
                         leading=ft.Icon(ft.icons.MANAGE_ACCOUNTS),
                         data={'sec': "settings", 'act': "edit_stream"},
                         on_click=drawer_element_selected
@@ -2102,7 +1897,9 @@ def main(page: ft.Page):
         os.environ["FLET_SECRET_KEY"] = os.urandom(12).hex()
 
     else:
-        err_text = "При запуске сервисов возникли ошибки\n\n" + "\n\n".join([f"{service[0]}: {service[1]['msg']}" for service in [serivce for serivce in startup.items()] if not service[1]['status']]) + "\n\nОбратитесь к администратору"
+        page.appbar = None
+        err_text = "При запуске сервисов возникли ошибки\n\n" + "\n\n".join(
+            [f"{service[0]}: {service[1]['msg']}" for service in [serivce for serivce in startup.items()] if not service[1]['status']]) + "\n\nОбратитесь к администратору"
         send_telegam_message(
             tID=os.getenv('ID_GROUP_ERRORS'),
             message_text=err_text
