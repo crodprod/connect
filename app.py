@@ -286,6 +286,8 @@ def main(page: ft.Page):
                 change_screen("login")
             elif data['act'] == "home":
                 change_screen("main")
+            elif data['act'] == "qr_codes":
+                change_screen("select_qr_group")
 
         elif data['sec'] == "children":
             if data['act'] == "update_table":
@@ -1097,14 +1099,6 @@ def main(page: ft.Page):
         elif target == "select_qr_group":
             col = ft.Column(
                 controls=[
-                    ft.Card(
-                        ft.Container(
-                            content=ft.ListTile(
-                                title=ft.Text(f"Список QR-кодов", size=16),
-                                subtitle=ft.Text('Выбор группы', size=20, weight=ft.FontWeight.W_400),
-                            )
-                        )
-                    ),
                     ft.ListTile(
                         leading=ft.Icon(ft.icons.FILTER_1),
                         title=ft.Text("Группа №1"),
@@ -1629,7 +1623,7 @@ def main(page: ft.Page):
 
     def get_showqr(target: str, value: str = None, admin: bool = False):
         page.scroll = ft.ScrollMode.HIDDEN
-        page.appbar = None
+        # page.appbar.visible = False
         # dlg_loading.loading_text = "Загрузка"
         # dlg_loading.open()
 
@@ -1651,7 +1645,7 @@ def main(page: ft.Page):
         users_list = make_db_request(query, params)
         if users_list is not None:
             if users_list:
-                page.clean()
+                page.controls.clear()
                 qr_screen_col = ft.Column(width=600, scroll=ft.ScrollMode.HIDDEN)
                 users_col = ft.Column(width=600)
 
@@ -1812,6 +1806,11 @@ def main(page: ft.Page):
                 leading=ft.Icon(ft.icons.DOCUMENT_SCANNER),
                 data={'sec': "documents", 'act': "documents"},
                 on_click=drawer_element_selected),
+            ft.ListTile(
+                title=ft.Text("QR-коды"),
+                leading=ft.Icon(ft.icons.QR_CODE_2),
+                data={'sec': "app", 'act': "qr_codes"},
+                on_click=drawer_element_selected),
             ft.ExpansionTile(
                 title=ft.Text("Настройки"),
                 # subtitle=ft.Text("Trailing expansion arrow icon"),
@@ -1912,7 +1911,7 @@ def main(page: ft.Page):
 
 if __name__ == "__main__":
     if platform.system() == "Windows":
-        os.environ['DEBUG'] = "1"
+        os.environ['DEBUG'] = "0"
     if is_debug():
         ft.app(
             target=main,

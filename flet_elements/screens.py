@@ -175,7 +175,7 @@ screens = {
     },
     'select_qr_group': {
         'appbar': {
-            'visible': False,
+            'visible': True,
             'leading': {
                 'icon': menu_icon,
                 'action': "drawer",
