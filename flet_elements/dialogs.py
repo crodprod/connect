@@ -1,16 +1,10 @@
-from flet import Page, AlertDialog, Row, Container, TextButton, Text, FontWeight, MainAxisAlignment, ProgressBar, Column, CrossAxisAlignment
+from flet import Page, AlertDialog, Row, Container, TextButton, Text, FontWeight, MainAxisAlignment, ProgressBar, Column, CrossAxisAlignment, BottomSheet as bs
 
 
 class InfoDialog:
-    def __init__(self, title: str, content, page: Page):
+    def __init__(self, page: Page):
         self.dialog = AlertDialog(
             modal=True,
-            title=Row(
-                [
-                    Container(Text(title, size=20, weight=FontWeight.W_400), expand=True),
-                ]
-            ),
-            content=content,
             actions_alignment=MainAxisAlignment.END,
             actions=[
                 TextButton(
@@ -19,12 +13,21 @@ class InfoDialog:
                 )
             ]
         )
-        self.title = title
-        self.content = content
+        self.content = Row(
+            [
+                Container(Text("Information text", size=20, weight=FontWeight.W_400), expand=True),
+            ]
+        )
+        self.title = "Inforamtion"
         self.page = page
 
     def open(self, action_btn_visible: bool = True):
-        self.dialog.title.controls[0].content.value = self.title
+        self.dialog.title = Row(
+            [
+                Container(Text(self.title, size=20, weight=FontWeight.W_400), expand=True),
+            ]
+        )
+
         self.dialog.content = self.content
 
         self.page.dialog = self.dialog
@@ -38,33 +41,63 @@ class InfoDialog:
 
 
 class LoadingDialog:
-    def __init__(self, loading_text: str = "Загрузка", page: Page = None):
+    def __init__(self, page: Page):
         self.dialog = AlertDialog(
-            modal=True,
-            content=Column(
-                controls=[
-                    Column(
-                        [
-                            Text(loading_text, size=20, weight=FontWeight.W_400),
-                            ProgressBar()
-                        ],
-                        alignment=MainAxisAlignment.CENTER),
-                ],
-                alignment=MainAxisAlignment.CENTER,
-                horizontal_alignment=CrossAxisAlignment.CENTER,
-                width=400,
-                height=50
-            )
+            modal=True
         )
-        self.loading_text = loading_text
+        self.loading_text = "Загрузка"
         self.page = page
 
     def open(self):
-        self.dialog.content.controls[0].controls[0].value = self.loading_text
+        self.dialog.content = Column(
+            controls=[
+                Column(
+                    [
+                        Text(self.loading_text, size=20, weight=FontWeight.W_400),
+                        ProgressBar()
+                    ],
+                    alignment=MainAxisAlignment.CENTER),
+            ],
+            alignment=MainAxisAlignment.CENTER,
+            horizontal_alignment=CrossAxisAlignment.CENTER,
+            width=400,
+            height=50
+        )
+
         self.page.dialog = self.dialog
         self.dialog.open = True
         self.page.update()
 
     def close(self):
         self.dialog.open = False
+        self.page.update()
+
+
+class BottomSheet:
+    def __init__(self, page: Page):
+        self.sheet = bs(
+            show_drag_handle=True
+        )
+        self.content = None
+        self.title = None
+        self.page = page
+        self.height = 500
+
+    def open(self):
+        self.sheet.content = Container(
+            Column(
+                controls=[
+                    # Text(self.title, size=20, weight=FontWeight.W_400),
+                    self.content
+                ],
+                height=self.height
+            ),
+            padding=15
+        )
+        self.page.bottom_sheet = self.sheet
+        self.sheet.open = True
+        self.page.update()
+
+    def close(self):
+        self.sheet.open = False
         self.page.update()

@@ -21,7 +21,7 @@ from bot_elements.callback_factory import TeachersCallbackFactory, MentorsCallba
 from database import MySQL, RedisTable
 from bot_elements.lexicon import lexicon, base_crod_url
 from bot_elements.keyboards import kb_hello, kb_main, tasker_kb, reboot_bot_kb, radio_kb, check_apply_to_channel_kb
-from bot_elements.signed_functions import generate_signed_url
+from bot_elements.signed_functions import create_signed_url
 from bot_elements.states import Radio, Feedback
 from bot_elements.functions import load_config_file, update_config_file
 from wording.wording import get_grouplist, get_feedback
@@ -86,22 +86,20 @@ months = {
 
 def make_db_request(sql_query: str, params: tuple = ()):
     db.connect()
-    logging.info(f"Executing: {sql_query} ({params})")
     db.execute(sql_query, params)
-    logging.info(db.result)
+    db.disconnect()
+
     if db.result['status'] == "ok":
         return db.data
-    else:
-        logging.error(f"Error executing: {sql_query} ({params})")
-    db.disconnect()
+    return False
 
 
 def get_text_link(title: str, link: str):
     return f"<a href='{link}'>{title}</a>"
 
 
-def set_redis_hash(sign, index):
-    redis.set(sign, index)
+def set_redis_hash(signature, index):
+    redis.set(signature, index)
 
 
 async def is_pass_phrase_ok(table: str, pass_phrase: str):
@@ -498,33 +496,37 @@ async def callbacks_mentors(callback: types.CallbackQuery, callback_data: Mentor
         elif action == "qrc":
             await callback.message.delete()
             target = 'children'
-            url = f"{base_crod_url}/connect/showqr?target={target}&value={user_info['group_num']}"
-            signed_url, sign = generate_signed_url(url, SECRET_KEY)
-            set_redis_hash(sign, f"{target}{user_info['group_num']}")
+            url = f"{base_crod_url}/connect/showqr?target={target}&value={user_info['group_num']}&initiator={callback.from_user.id}"
+
+            signature, signed_url = create_signed_url(url, SECRET_KEY)
+            set_redis_hash(signature, f"showqr_{callback.from_user.id}_{target}_{user_info['group_num']}")
+
             btn = keyboard.InlineKeyboardBuilder().button(
-                text="Показать QR-коды #️⃣",
+                text="QR-коды #️⃣",
                 web_app=types.WebAppInfo(
                     url=signed_url
                 )
             )
             await callback.message.answer(
-                text="Чтобы просмотреть список QR-кодов группы, нажмите на кнопку ниже и выберите ребёнка",
+                text="Нажмите на кнопку, чтобы открыть список QR-кодов вашей группы",
                 reply_markup=btn.as_markup()
             )
         elif action == "traffic":
             await callback.message.delete()
             module_id = 1
-            url = f"{base_crod_url}/connect/modulecheck?mentor_id={user_info['id']}&module_id={module_id}"
-            signed_url, sign = generate_signed_url(url, SECRET_KEY)
-            set_redis_hash(sign, f"{user_info['id']}{module_id}")
+            url = f"{base_crod_url}/connect/modulecheck?mentor_id={user_info['id']}&module_id={module_id}&initiator={callback.from_user.id}"
+
+            signature, signed_url = create_signed_url(url, SECRET_KEY)
+            set_redis_hash(signature, f"modulecheck_{callback.from_user.id}_{user_info['id']}_{module_id}")
+
             btn = keyboard.InlineKeyboardBuilder().button(
-                text="Отметить посещаемость",
+                text="Посещаемость",
                 web_app=types.WebAppInfo(
                     url=signed_url
                 )
             )
             await callback.message.answer(
-                text="Чтобы просмотреть список QR-кодов группы, нажмите на кнопку ниже и выберите ребёнка",
+                text="Нажмите на кнопку, чтобы отметить посещаемость",
                 reply_markup=btn.as_markup()
             )
 

@@ -75,8 +75,7 @@ kb_main = {
     'children': builder_children,
     'mentors': builder_mentors,
     'teachers': builder_teachers,
-    'admins': builder_admins,
-    None: None
+    'admins': builder_admins
 }
 
 

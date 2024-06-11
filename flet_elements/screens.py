@@ -173,4 +173,16 @@ screens = {
         },
         'scroll_mode': ScrollMode.HIDDEN
     },
+    'select_qr_group': {
+        'appbar': {
+            'visible': False,
+            'leading': {
+                'icon': menu_icon,
+                'action': "drawer",
+                'target': None
+            },
+            'title': "QR-коды"
+        },
+        'scroll_mode': ScrollMode.HIDDEN
+    },
 }

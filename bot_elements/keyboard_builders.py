@@ -1,3 +1,4 @@
+from aiogram.types import WebAppInfo
 from aiogram.utils import keyboard
 
 from bot_elements.callback_factory import TeachersCallbackFactory, MentorsCallbackFactory, ChildrenCallbackFactory, AdminsCallbackFactory
@@ -20,10 +21,13 @@ builder_mentors.adjust(2)
 builder_children = keyboard.InlineKeyboardBuilder()
 builder_children.button(text="Радио 📻", callback_data=ChildrenCallbackFactory(action="radio"))
 builder_children.button(text="Обратная связь 💬", callback_data=ChildrenCallbackFactory(action="feedback"))
+# builder_children.button(text="Обратная связь 💬", web_app=WebAppInfo(url="https://vk.com"))
 builder_children.button(text="Образовательные модули 💡", callback_data=ChildrenCallbackFactory(action="modules"))
 builder_children.adjust(2)
 
 builder_admins = keyboard.InlineKeyboardBuilder()
 builder_admins.button(text="Списки модулей", callback_data=AdminsCallbackFactory(action="modules_list"))
+builder_children.button(text="QR-коды #️⃣", web_app=WebAppInfo(url=f"{base_crod_url}/connect/showqr/admin"))
+# builder_children.button(text="Обратная связь 💬", web_app=WebAppInfo(url="https://vk.com"))
 builder_admins.button(text="Открыть Connect 💡", url=f"{base_crod_url}/connect")
 builder_admins.adjust(2)

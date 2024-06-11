@@ -18,7 +18,7 @@ from transliterate import translit
 
 import wording.wording
 from database import MySQL, RedisTable
-from flet_elements.dialogs import InfoDialog, LoadingDialog
+from flet_elements.dialogs import InfoDialog, LoadingDialog, BottomSheet
 from flet_elements.functions import remove_folder_content, get_hello, get_system_list
 from flet_elements.modules_locations import locations
 from flet_elements.screens import screens
@@ -75,16 +75,15 @@ redis = RedisTable(
 
 
 def url_sign_check(sign: str, index: str):
-    logging.info(f"Redis: getting signature (index: {index})")
+    logging.info(f"Redis: finding signature {index} for {sign}")
     try:
         response = 0
         if redis.exists(index):
-
             if redis.get(index) == sign:
                 response = 1
             else:
                 response = -1
-        logging.info(f"Redis: getting OK")
+        logging.info(f"Redis: signature finded")
         return response
     except Exception as e:
         logging.error(f"Redis: {e}")
@@ -109,16 +108,11 @@ def main(page: ft.Page):
     remaining_children_traffic = []
 
     dlg_loading = LoadingDialog(page=page)
-    dlg_info = InfoDialog(
-        title="Info",
-        content=ft.Text("Information Dialog"),
-        page=page
-    )
+    dlg_info = InfoDialog(page=page)
+    bottom_sheet = BottomSheet(page=page)
 
     db.connect()
-    print(db.result)
     redis.connect()
-    print(redis.result)
 
     if db.result['status'] == "error":
         startup['mysql']['status'] = False
@@ -129,10 +123,7 @@ def main(page: ft.Page):
         startup['redis']['msg'] = redis.result['message']
 
     def make_db_request(sql_query: str, params: tuple = ()):
-
-        logging.info(f"Executing: {sql_query} ({params})")
         db.execute(sql_query, params)
-        logging.info(db.result)
         if db.result['status'] == "ok":
             return db.data
         else:
@@ -168,7 +159,6 @@ def main(page: ft.Page):
 
     def check_url(sign, index):
         response = url_sign_check(sign, index)
-        print(response)
         text = {
             -2: "При получении данных возникла ошибка, попробуйте ещё раз.",
             -1: "Вы перешли по некорректной ссылке, попробуйте ещё раз.",
@@ -183,6 +173,20 @@ def main(page: ft.Page):
             return False
         return True
 
+    def clean_all_children_info():
+        """
+        Удаляет все данные о детях из таблиц children, feedback, modules_records
+        :return:
+        """
+
+        query = """
+            TRUNCATE TABLE crodconnect.children;
+            TRUNCATE TABLE crodconnect.feedback;
+            TRUNCATE TABLE crodconnect.modules_records;
+        """
+
+        make_db_request(query)
+
     def insert_children_info(table_filepath: str):
         dlg_loading.loading_text = "Добавляем детей"
         dlg_loading.open()
@@ -190,30 +194,29 @@ def main(page: ft.Page):
         ws = wb.sheet_by_index(0)
         rows_num = ws.nrows
         row = 1
-        query = "UPDATE crodconnect.children SET status = 'removed'"
-        if make_db_request(query) is not None:
-            while row < rows_num:
-                dlg_loading.dialog.content.controls[0].controls[0].value = f"Добавляем детей {row}/{rows_num}"
-                page.update()
-                child = []
-                for col in range(5):
-                    child.append(ws.cell_value(row, col))
-                pass_phrase = create_passphrase(child[0])
-                birth = xlrd.xldate.xldate_as_tuple(child[1], 0)
-                # print(birth)
-                birth = f"{birth[0]}-{birth[1]}-{birth[2]}"
-                query = "INSERT INTO crodconnect.children (name, group_num, birth, comment, parrent_name, parrent_phone, pass_phrase) VALUES (%s, %s, %s, %s, %s, %s, %s)"
-                response = make_db_request(query, (child[0], random.randint(1, 5), birth, child[2], child[3], child[4], pass_phrase,))
-                if response is None:
-                    dlg_loading.close()
-                    open_sb("Ошибка БД", ft.colors.RED)
-                    return
-                row += 1
-            dlg_loading.close()
-            change_screen("main")
-            open_sb("Список детей загружен", ft.colors.GREEN)
-            if os.path.exists(f'assets/uploads/{table_filepath}'):
-                os.remove(f'assets/uploads/{table_filepath}')
+
+        clean_all_children_info()
+
+        while row < rows_num:
+            dlg_loading.dialog.content.controls[0].controls[0].value = f"Добавляем детей {row}/{rows_num}"
+            page.update()
+            child = []
+            for col in range(5):
+                child.append(ws.cell_value(row, col))
+            pass_phrase = create_passphrase(child[0])
+            birth = xlrd.xldate.xldate_as_tuple(child[1], 0)
+            birth = f"{birth[0]}-{birth[1]}-{birth[2]}"
+            query = "INSERT INTO crodconnect.children (name, group_num, birth, comment, parrent_name, parrent_phone, pass_phrase) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+            make_db_request(query, (child[0], random.randint(1, 5), birth, child[2], child[3], child[4], pass_phrase,))
+            if db.result['status'] == 'error':
+                dlg_loading.close()
+                return
+            row += 1
+        dlg_loading.close()
+        change_screen("main")
+        open_sb("Список детей загружен", ft.colors.GREEN)
+        if os.path.exists(f'assets/uploads/{table_filepath}'):
+            os.remove(f'assets/uploads/{table_filepath}')
 
     def make_reboot(target: str):
         reboot_systemd(target)
@@ -323,7 +326,7 @@ def main(page: ft.Page):
         return phrase
 
     def add_new_mentor():
-        query = "INSERT INTO crodconnect.mentors (name, group_num, pass_phrase, status) VALUES (%s, %s, %s, 'active')"
+        query = "INSERT INTO crodconnect.mentors (name, group_num, pass_phrase) VALUES (%s, %s, %s)"
         name = new_mentor_name_field.value.strip()
         pass_phrase = create_passphrase(name)
         response = make_db_request(query, (name, new_mentor_group_dd.value, pass_phrase))
@@ -375,22 +378,39 @@ def main(page: ft.Page):
             change_screen("admins_info")
 
     def goto_change_mentor_group(e: ft.ControlEvent):
-        dialog_edit_mentor_group.data = e.control.data
-        open_dialog(dialog_edit_mentor_group)
+        bottom_sheet.title = "Изменение группы"
+        bottom_sheet.height = 100
+        bottom_sheet.content = ft.Column(
+            [
+                ft.Text("Выберите новую группу", size=18, weight=ft.FontWeight.W_200),
+                ft.Row(
+                    controls=[
+                        ft.FilledTonalButton(text='1', on_click=lambda _: change_mentor_group(1)),
+                        ft.FilledTonalButton(text='2', on_click=lambda _: change_mentor_group(2)),
+                        ft.FilledTonalButton(text='3', on_click=lambda _: change_mentor_group(3)),
+                        ft.FilledTonalButton(text='4', on_click=lambda _: change_mentor_group(4)),
+                        ft.FilledTonalButton(text='5', on_click=lambda _: change_mentor_group(5))
+                    ],
+                    scroll=ft.ScrollMode.AUTO
+                )
+            ]
+        )
+        bottom_sheet.open()
+        bottom_sheet.sheet.data = e.control.data
 
     def change_mentor_group(new_group):
-        close_dialog(dialog_edit_mentor_group)
+        bottom_sheet.close()
         dlg_loading.loading_text = "Обновляем"
         dlg_loading.open()
         query = "UPDATE crodconnect.mentors SET group_num = %s WHERE pass_phrase = %s"
-        response = make_db_request(query, (new_group, dialog_edit_mentor_group.data,))
+        response = make_db_request(query, (new_group, bottom_sheet.sheet.data,))
         dlg_loading.close()
         if response is not None:
             change_screen('mentors_info')
             open_sb("Группа изменена", ft.colors.GREEN)
 
             query = "SELECT telegram_id from crodconnect.mentors WHERE pass_phrase = %s"
-            mentor_tid = make_db_request(query, (dialog_edit_mentor_group.data,))['telegram_id']
+            mentor_tid = make_db_request(query, (bottom_sheet.sheet.data,))['telegram_id']
             if mentor_tid is not None:
                 send_telegam_message(
                     tID=mentor_tid,
@@ -442,7 +462,7 @@ def main(page: ft.Page):
                     dlg_loading.dialog.content.controls[0].controls[0].value = f"Генерируем документ (группа {group_num}/{5})"
                     page.update()
 
-                    query = "SELECT * FROM crodconnect.children WHERE group_num = %s AND status = 'active'"
+                    query = "SELECT * FROM crodconnect.children WHERE group_num = %s"
                     group_list = make_db_request(query, (group_num,))
 
                     if group_list is not None:
@@ -483,7 +503,7 @@ def main(page: ft.Page):
                     dlg_loading.dialog.content.controls[0].controls[0].value = f"Генерируем документ (группа {group_num}/{5})"
                     page.update()
 
-                    query = "SELECT * FROM crodconnect.children WHERE group_num = %s AND status = 'active'"
+                    query = "SELECT * FROM crodconnect.children WHERE group_num = %s AND status = 'waiting_for_registration'"
                     group_list = make_db_request(query, (group_num,))
 
                     if group_list is not None:
@@ -500,7 +520,7 @@ def main(page: ft.Page):
                     dlg_loading.dialog.content.controls[0].controls[0].value = f"Генерируем документ ({s})"
                     page.update()
 
-                    query = f"SELECT * FROM {s} WHERE status = 'active'"
+                    query = f"SELECT * FROM {s} WHERE status = 'waiting_for_registration'"
                     group_list = make_db_request(query)
 
                     if group_list is not None:
@@ -545,11 +565,11 @@ def main(page: ft.Page):
                             dlg_loading.dialog.content.controls[0].controls[0].value = f"Генерируем документ ({module['name'][:10]}...)"
                             page.update()
 
-                            query = "SELECT * FROM crodconnect.teachers WHERE module_id = %s and status = 'active'"
+                            query = "SELECT * FROM crodconnect.teachers WHERE module_id = %s"
                             teacher_info = make_db_request(query, (module['id'],))
 
                             if teacher_info is not None:
-                                query = "SELECT * FROM crodconnect.children WHERE id in (SELECT child_id FROM crodconnect.modules_records WHERE module_id = %s) and status = 'active'"
+                                query = "SELECT * FROM crodconnect.children WHERE id in (SELECT child_id FROM crodconnect.modules_records WHERE module_id = %s)"
                                 children_list = make_db_request(query, (module['id'],))
 
                                 if children_list is not None:
@@ -765,12 +785,14 @@ def main(page: ft.Page):
             if admins_list is not None:
                 col = ft.Column()
                 for admin in admins_list:
-                    query = "SELECT * FROM crodconnect.teachers WHERE module_id = %s and status = 'active'"
+                    query = "SELECT * FROM crodconnect.teachers WHERE module_id = %s"
                     teacher_info = make_db_request(query, (admin['id'],))
+                    print(teacher_info)
                     if teacher_info is not None:
                         popup_items = [
-                            ft.FilledButton(text='Изменить локацию', icon=ft.icons.LOCATION_ON, on_click=show_qr, data=f"teachers_{teacher_info['pass_phrase']}"),
-                            ft.FilledButton(text='QR-код', icon=ft.icons.QR_CODE, on_click=show_qr, data=f"teachers_{teacher_info['pass_phrase']}"),
+                            ft.FilledButton(text='Изменить локацию', icon=ft.icons.LOCATION_ON, on_click=show_qr,
+                                            data={'phrase': f"teachers_{teacher_info['pass_phrase']}", 'caption': teacher_info['name']}),
+                            ft.FilledButton(text='QR-код', icon=ft.icons.QR_CODE, on_click=show_qr, data={'phrase': f"teachers_{teacher_info['pass_phrase']}", 'caption': teacher_info['name']}),
                             ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=teacher_info['pass_phrase'], on_click=remove_admin),
                         ]
 
@@ -787,8 +809,8 @@ def main(page: ft.Page):
                                             [
                                                 ft.Container(
                                                     ft.ListTile(
-                                                        title=ft.Text('Название', size=14),
-                                                        subtitle=ft.Text(admin['name'], size=16),
+                                                        # title=ft.Text('Название', size=14),
+                                                        title=ft.Text(admin['name'], size=16),
                                                         leading=ft.Icon(ft.icons.ARTICLE)
                                                     ),
                                                     expand=True
@@ -800,26 +822,26 @@ def main(page: ft.Page):
                                         ),
                                         ft.Container(ft.Divider(thickness=1), ),
                                         ft.ListTile(
-                                            title=ft.Text('Преподаватель', size=14),
-                                            subtitle=ft.Text(teacher_info['name'], size=16),
+                                            # title=ft.Text('Преподаватель', size=14),
+                                            title=ft.Text(teacher_info['name'], size=16),
                                             leading=ft.Icon(ft.icons.PERSON)
                                         ),
                                         ft.Container(ft.Divider(thickness=1), ),
                                         ft.ListTile(
-                                            title=ft.Text('Локация', size=14),
-                                            subtitle=ft.Text(admin['location'], size=16),
+                                            # title=ft.Text('Локация', size=14),
+                                            title=ft.Text(admin['location'], size=16),
                                             leading=ft.Icon(ft.icons.LOCATION_ON)
                                         ),
                                         ft.Container(ft.Divider(thickness=1), ),
                                         ft.ListTile(
-                                            title=ft.Text('Заполненность', size=14),
-                                            subtitle=ft.Text(f"{admin['seats_real']} из {admin['seats_max']}", size=16),
+                                            # title=ft.Text('Заполненность', size=14),
+                                            title=ft.Text(f"{admin['seats_real']} из {admin['seats_max']}", size=16),
                                             leading=ft.Icon()
                                         )
                                     ],
                                     spacing=0.5
                                 ),
-                                # padding=ft.padding.only(left=15, right=15)
+                                padding=ft.padding.only(top=15, bottom=15)
                             ),
                             width=600
                         )
@@ -865,14 +887,14 @@ def main(page: ft.Page):
             ]
             dlg_loading.loading_text = "Загрузка"
             dlg_loading.open()
-            query = "SELECT * FROM crodconnect.mentors where status != 'removed'"
+            query = "SELECT * FROM crodconnect.mentors"
             mentors_list = make_db_request(query)
             if mentors_list is not None:
                 col = ft.Column()
                 for mentor in mentors_list:
                     popup_items = [
                         ft.FilledButton(text='Изменить группу', icon=ft.icons.EDIT, on_click=goto_change_mentor_group, data=mentor['pass_phrase']),
-                        ft.FilledButton(text='QR-код', icon=ft.icons.QR_CODE, on_click=show_qr, data=f"mentors_{mentor['pass_phrase']}"),
+                        ft.FilledButton(text='QR-код', icon=ft.icons.QR_CODE, on_click=show_qr, data={'phrase': f"mentors_{mentor['pass_phrase']}", 'caption': mentor['name']}),
                         ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=mentor['pass_phrase'], on_click=remove_mentor),
                     ]
                     if mentor['telegram_id'] is None:
@@ -881,8 +903,8 @@ def main(page: ft.Page):
                         activity_color = ft.colors.GREEN
 
                     if mentor['status'] == 'active':
-                        popup_items.insert(0, ft.FilledButton(text='Отключить', icon=ft.icons.BLOCK, on_click=change_active_status, data=f"mentors_{mentor['pass_phrase']}_deactivated"), )
-                    elif mentor['status'] == 'deactivated':
+                        popup_items.insert(0, ft.FilledButton(text='Отключить', icon=ft.icons.BLOCK, on_click=change_active_status, data=f"mentors_{mentor['pass_phrase']}_frozen"), )
+                    elif mentor['status'] == 'frozen':
                         activity_color = ft.colors.GREY
                         popup_items.insert(0, ft.FilledButton(text='Активировать', icon=ft.icons.ADD, on_click=change_active_status, data=f"mentors_{mentor['pass_phrase']}_active"), )
 
@@ -921,13 +943,16 @@ def main(page: ft.Page):
             ]
             dlg_loading.loading_text = "Загрузка"
             dlg_loading.open()
-            query = "SELECT * FROM crodconnect.admins WHERE status != 'removed'"
+            query = "SELECT * FROM crodconnect.admins"
             admins_list = make_db_request(query)
+            if type(admins_list) == dict: admins_list = [admins_list]
+
             if admins_list is not None:
                 col = ft.Column()
                 for admin in admins_list:
+                    print(admin, admins_list)
                     popup_items = [
-                        ft.FilledButton(text='QR-код', icon=ft.icons.QR_CODE, on_click=show_qr, data=f"admins_{admin['pass_phrase']}"),
+                        ft.FilledButton(text='QR-код', icon=ft.icons.QR_CODE, on_click=show_qr, data={'phrase': f"admins_{admin['pass_phrase']}", 'caption': admin['name']}),
                         ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=admin['pass_phrase'], on_click=remove_admin),
                     ]
                     if admin['telegram_id'] is None:
@@ -936,8 +961,8 @@ def main(page: ft.Page):
                         activity_color = ft.colors.GREEN
 
                     if admin['status'] == 'active':
-                        popup_items.insert(0, ft.FilledButton(text='Отключить', icon=ft.icons.BLOCK, on_click=change_active_status, data=f"admins_{admin['pass_phrase']}_deactivated"))
-                    elif admin['status'] == 'deactivated':
+                        popup_items.insert(0, ft.FilledButton(text='Отключить', icon=ft.icons.BLOCK, on_click=change_active_status, data=f"admins_{admin['pass_phrase']}_frozen"))
+                    elif admin['status'] == 'frozen':
                         activity_color = ft.colors.GREY
                         popup_items.insert(0, ft.FilledButton(text='Активировать', icon=ft.icons.ADD, on_click=change_active_status, data=f"admins_{admin['pass_phrase']}_active"))
 
@@ -1068,6 +1093,63 @@ def main(page: ft.Page):
             )
             page.add(col)
             dlg_loading.close()
+
+        elif target == "select_qr_group":
+            col = ft.Column(
+                controls=[
+                    ft.Card(
+                        ft.Container(
+                            content=ft.ListTile(
+                                title=ft.Text(f"Список QR-кодов", size=16),
+                                subtitle=ft.Text('Выбор группы', size=20, weight=ft.FontWeight.W_400),
+                            )
+                        )
+                    ),
+                    ft.ListTile(
+                        leading=ft.Icon(ft.icons.FILTER_1),
+                        title=ft.Text("Группа №1"),
+                        on_click=lambda _: get_showqr('children', '1', admin=True)
+                    ),
+                    ft.ListTile(
+                        leading=ft.Icon(ft.icons.FILTER_2),
+                        title=ft.Text("Группа №2"),
+                        on_click=lambda _: get_showqr('children', '2', admin=True)
+                    ),
+                    ft.ListTile(
+                        leading=ft.Icon(ft.icons.FILTER_3),
+                        title=ft.Text("Группа №3"),
+                        on_click=lambda _: get_showqr('children', '3', admin=True)
+                    ),
+                    ft.ListTile(
+                        leading=ft.Icon(ft.icons.FILTER_4),
+                        title=ft.Text("Группа №4"),
+                        on_click=lambda _: get_showqr('children', '4', admin=True)
+                    ),
+                    ft.ListTile(
+                        leading=ft.Icon(ft.icons.FILTER_5),
+                        title=ft.Text("Группа №5"),
+                        on_click=lambda _: get_showqr('children', '5', admin=True)
+                    ),
+                    ft.ListTile(
+                        leading=ft.Icon(ft.icons.EMOJI_PEOPLE),
+                        title=ft.Text("Воспитатели"),
+                        on_click=lambda _: get_showqr('mentors', admin=True)
+                    ),
+                    ft.ListTile(
+                        leading=ft.Icon(ft.icons.MANAGE_ACCOUNTS),
+                        title=ft.Text("Администрация"),
+                        on_click=lambda _: get_showqr('admins', admin=True)
+                    ),
+                    ft.ListTile(
+                        leading=ft.Icon(ft.icons.SCHOOL),
+                        title=ft.Text("Преподаватели"),
+                        on_click=lambda _: get_showqr('teachers', admin=True)
+                    ),
+                ],
+                width=600,
+                # scroll=ft.ScrollMode.HIDDEN
+            )
+            page.add(col)
 
         elif target == "app_info":
             col = ft.Column(
@@ -1201,8 +1283,8 @@ def main(page: ft.Page):
 
     def check_confirmation():
         user_code = confirmation_code_field.value
-        close_dialog(dialog_confirmation)
         if dialog_confirmation.data[0] == user_code or user_code == "admin":
+            close_dialog(dialog_confirmation)
             open_sb("Действие подтверждено", ft.colors.GREEN)
             action = dialog_confirmation.data[1]
             if action == "upload_children":
@@ -1251,11 +1333,19 @@ def main(page: ft.Page):
                 dlg_loading.open()
                 # to-do: перезагрузка сервера
 
+            elif action == "admin_show_qrlist":
+                change_screen("select_qr_group")
+
+
         else:
-            open_sb("Неверный код", ft.colors.RED)
+            confirmation_code_field.border_color = ft.colors.RED
+            page.update()
+            time.sleep(2)
+            confirmation_code_field.border_color = None
+            page.update()
         confirmation_code_field.value = ""
 
-    def open_confirmation(action: str):
+    def open_confirmation(action: str, type: str = 'simple', tid=None):
 
         actions_descrition = {
             'upload_children': {
@@ -1272,47 +1362,35 @@ def main(page: ft.Page):
             },
             'reboot_server': {
                 'title': "Перезагрузка сервера"
+            },
+            'admin_show_qrlist': {
+                'title': "QR-коды"
             }
         }
 
-        if is_telegrammed('confirm'):
-            dialog_confirmation.title.controls[0].content.value = actions_descrition[action]['title']
-            confirmation_code = os.urandom(3).hex()
-            dialog_confirmation.data = [confirmation_code, action]
-            open_dialog(dialog_confirmation)
+        dialog_confirmation.title.controls[0].content.value = actions_descrition[action]['title']
+        confirmation_code = os.urandom(3).hex()
+        dialog_confirmation.data = [confirmation_code, action]
 
-            send_telegam_message(
-                password_field.data['telegram_id'],
-                "*Код подтверждения*"
-                f"\n\nДля подтверждения действия в ЦРОД.Коннект введите `{confirmation_code}`"
-            )
+        if type == 'simple':
+            # подтверждение из панели управления
+            if is_telegrammed('confirm'):
+                open_dialog(dialog_confirmation)
+                id = password_field.data['telegram_id']
+            else:
+                return
+
+        elif type == 'telegram':
+            open_dialog(dialog_confirmation)
+            id = tid
+
+        send_telegam_message(
+            id,
+            "*Код подтверждения*"
+            f"\n\nДля подтверждения действия в ЦРОД.Коннект введите `{confirmation_code}`"
+        )
 
     confirmation_code_field = ft.TextField(hint_text="Код подтверждения", on_submit=lambda _: check_confirmation())
-
-    dialog_edit_mentor_group = ft.AlertDialog(
-        modal=True,
-        title=ft.Row(
-            [
-                ft.Container(ft.Text("Изменение группы", size=20, weight=ft.FontWeight.W_400), expand=True),
-                ft.IconButton(ft.icons.CLOSE_ROUNDED, on_click=lambda _: close_dialog(dialog_edit_mentor_group))
-            ]
-        ),
-        content=ft.Column(
-            [
-                ft.Text("Выберите новую группу", size=18, weight=ft.FontWeight.W_200),
-                ft.Column(
-                    controls=[
-                        ft.ElevatedButton(text="1", width=300, on_click=lambda _: change_mentor_group(1)),
-                        ft.ElevatedButton(text="2", width=300, on_click=lambda _: change_mentor_group(2)),
-                        ft.ElevatedButton(text="3", width=300, on_click=lambda _: change_mentor_group(3)),
-                        ft.ElevatedButton(text="4", width=300, on_click=lambda _: change_mentor_group(4)),
-                        ft.ElevatedButton(text="5", width=300, on_click=lambda _: change_mentor_group(5))
-                    ]
-                )
-            ],
-            height=285
-        )
-    )
 
     dialog_confirmation = ft.AlertDialog(
         modal=True,
@@ -1334,14 +1412,24 @@ def main(page: ft.Page):
     )
 
     def login():
-        query = "SELECT * FROM crodconnect.admins WHERE password = %s and status = 'active'"
+        query = "SELECT * FROM crodconnect.admins WHERE password = %s"
         admin_info = make_db_request(query, (password_field.value,))
-        if admin_info is not None:
-            if admin_info:
-                password_field.data = admin_info
-                change_screen("main")
-            else:
+        if db.result['status'] == 'ok':
+            if not admin_info:
                 open_sb("Ошибка доступа", ft.colors.RED)
+            else:
+                if admin_info['status'] == 'active':
+                    password_field.data = admin_info
+                    change_screen("main")
+
+                elif admin_info['status'] == 'frozen':
+                    password_field.value = ''
+                    dlg_info.title = "Авторизация"
+                    dlg_info.content = ft.Text(
+                        "Ваш аккаунт деактивирован, поэтому вы не можете получить доступ к панели управления. Если вы считаете, что произошла ошибка, то обратитесь к администрации.",
+                        width=600, size=16, weight=ft.FontWeight.W_200
+                    )
+                    dlg_info.open()
 
         page.update()
 
@@ -1511,32 +1599,38 @@ def main(page: ft.Page):
 
     def get_user_qr(e: ft.ControlEvent):
         data = e.control.data
-        phrase = f"{data['status']}_{data['pass_phrase']}"
-        show_qr(phrase)
+        show_qr({'phrase': f"{data['status']}_{data['pass_phrase']}", 'caption': data['name']})
 
-    def show_qr(phrase):
+    def show_qr(e):
         # показ диалога с qr-кодом
 
-        if type(phrase) != str:
-            phrase = phrase.control.data
+        qr_data = e
+        if type(e) == ft.ControlEvent:
+            qr_data = e.control.data
 
-        qr_path = f"assets/qrc/{phrase}.png"
-        link = f"https://t.me/{os.getenv('BOT_NAME')}?start={phrase}"
+        qr_path = f"assets/qrc/{qr_data['phrase']}.png"
+        link = f"https://t.me/{os.getenv('BOT_NAME')}?start={qr_data['phrase']}"
         qr_img = qrcode.make(data=link)
         qr_img.save(qr_path)
 
-        dialog_qr.content = ft.Image(src=f"qrc/{phrase}.png", border_radius=ft.border_radius.all(10), width=300)
+        dialog_qr.content = ft.Column(
+            [
+                ft.Image(src=f"qrc/{qr_data['phrase']}.png", border_radius=ft.border_radius.all(10), width=300),
+                ft.Text(qr_data['caption'], size=16, weight=ft.FontWeight.W_200)
+            ],
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            height=350
+        )
 
         dialog_qr.actions[0].on_click = lambda _: copy_qr_link(link)
         page.dialog = dialog_qr
         dialog_qr.open = True
         page.update()
 
-    def get_showqr(target: str, value: str = ""):
-        page.appbar = None
+    def get_showqr(target: str, value: str = None, admin: bool = False):
         page.scroll = ft.ScrollMode.HIDDEN
-        dlg_loading.loading_text = "Загрузка"
-        dlg_loading.open()
+        # dlg_loading.loading_text = "Загрузка"
+        # dlg_loading.open()
 
         titles = {
             'admins': "Администрация",
@@ -1545,17 +1639,18 @@ def main(page: ft.Page):
         }
 
         if target == "children":
-            query = f"SELECT * FROM crodconnect.children WHERE group_num = %s AND telegram_id is null and status = 'active'"
+            query = f"SELECT * FROM crodconnect.children WHERE group_num = %s AND status = 'waiting_for_registration'"
             params = (value,)
             group_title = f"Группа №{value}"
         else:
-            query = f"SELECT * FROM {target} WHERE telegram_id is NULL and status = 'active'"
+            query = f"SELECT * FROM {target} WHERE status = 'waiting_for_registration'"
             params = ()
             group_title = f"{titles[target]}"
 
         users_list = make_db_request(query, params)
         if users_list is not None:
             if users_list:
+                page.clean()
                 qr_screen_col = ft.Column(width=600, scroll=ft.ScrollMode.HIDDEN)
                 users_col = ft.Column(width=600)
 
@@ -1567,16 +1662,18 @@ def main(page: ft.Page):
                                 size=18,
                                 weight=ft.FontWeight.W_300,
                             ),
-                            data={'status': target, 'pass_phrase': user['pass_phrase']},
+                            data={'status': target, 'pass_phrase': user['pass_phrase'], 'name': user['name']},
                             on_click=get_user_qr
                         )
                     )
                     users_col.controls.append(ft.Divider(thickness=1))
 
+                back_btn = ft.IconButton(ft.icons.ARROW_BACK_IOS_NEW, visible=admin, on_click=lambda _:change_screen('select_qr_group'))
                 qr_screen_col.controls = [
                     ft.Card(
                         ft.Container(
                             content=ft.ListTile(
+                                leading=back_btn,
                                 title=ft.Text(f"Список QR-кодов", size=16),
                                 subtitle=ft.Text(group_title, size=20, weight=ft.FontWeight.W_400),
                             )
@@ -1585,14 +1682,14 @@ def main(page: ft.Page):
                     users_col
                 ]
                 page.add(qr_screen_col)
-                dlg_loading.close()
+                # dlg_loading.close()
             else:
                 dlg_info.title = "QR-коды"
                 dlg_info.content = ft.Text(
                     f"Все пользователи в группе «{group_title}» зарегистрированы!",
                     width=600, size=16, weight=ft.FontWeight.W_200
                 )
-                dlg_info.open(action_btn_visible=False)
+                dlg_info.open(action_btn_visible=admin)
 
     def get_modulecheck(mentor_id: str, module_id: str):
         page.scroll = ft.ScrollMode.HIDDEN
@@ -1756,17 +1853,19 @@ def main(page: ft.Page):
     if is_debug():
         page.window_width = 377
         page.window_height = 768
-        page.route = "/"
-        # page.route = "/modulecheck?mentor_id=26&module_id=1&signature=265013c29e25b5c1a7b3782fcefac903c473d53c4d55b593e8b8d35990fd43db"
-        # page.route = "/showqr?target=children&value=3&signature=e4d0bb16a50c20ca7ce53b0d753f2f7570ea2990750fd76ae62daa6030d1b27a"
+        # page.route = "/"
+        # page.route = "/modulecheck?mentor_id=26&module_id=1&initiator=409801981&signature=2f686ce6a26f9d7da3b8640d41e263de509a480d5712d8a6783996c7e9317f45"
+        # page.route = "/showqr/mentor?target=children&value=3&initiator=409801981&signature=574c436784b7f040165534dafb02b301a8c63c388ade48b15f3b798d2841d035"
+        page.route = "/showqr/admin?initiator=409801981"
 
     # Точка входа
     url = urlparse(page.route)
-    url_path = url.path
+    logging.info(f'Input URL: {url}')
+    url_path = url.path.split('/')[1:]
     url_params = parse_qs(url.query)
 
     if all([fl[1]['status'] for fl in startup.items()]):
-        if url_path == "/":
+        if not url_path[0]:
             if is_debug():
                 password_field.value = "lrrrtm"
                 change_screen("login")
@@ -1774,15 +1873,22 @@ def main(page: ft.Page):
             else:
                 change_screen("login")
 
-        elif url_path == "/modulecheck":
-            mentor_id, module_id, sign = url_params['mentor_id'][0], url_params['module_id'][0], url_params['signature'][0]
-            if check_url(sign, f"{mentor_id}{module_id}"):
+        elif url_path[0] == "modulecheck":
+            mentor_id, module_id, initiator, sign = url_params['mentor_id'][0], url_params['module_id'][0], url_params['initiator'][0], url_params['signature'][0]
+            if check_url(sign, f"modulecheck_{initiator}_{mentor_id}_{module_id}"):
                 get_modulecheck(mentor_id, module_id)
 
-        elif url_path == "/showqr":
-            target, value, sign = url_params['target'][0], url_params['value'][0], url_params['signature'][0]
-            if check_url(sign, f"{target}{value}"):
-                get_showqr(target, value)
+        elif url_path[0] == "showqr":
+            initiator = url_params['initiator'][0]
+
+            if url_path[1] == "admin":
+                open_confirmation('admin_show_qrlist', type='telegram', tid=initiator)
+
+            else:
+                target, value, sign = url_params['target'][0], url_params['value'][0], url_params['signature'][0]
+
+                if check_url(sign, f"showqr_{initiator}_{target}_{value}"):
+                    get_showqr(target, value, url_path[1])
 
         os.environ["FLET_SECRET_KEY"] = os.urandom(12).hex()
 
