@@ -497,7 +497,7 @@ async def callbacks_mentors(callback: types.CallbackQuery, callback_data: Mentor
         elif action == "qrc":
             await callback.message.delete()
             target = 'children'
-            url = f"{base_crod_url}/connect/showqr?target={target}&value={user_info['group_num']}&initiator={callback.from_user.id}"
+            url = f"{base_crod_url}/connect/showqr/mentor?target={target}&value={user_info['group_num']}&initiator={callback.from_user.id}"
 
             signature, signed_url = create_signed_url(url, SECRET_KEY)
             set_redis_hash(signature, f"showqr_{callback.from_user.id}_{target}_{user_info['group_num']}")
