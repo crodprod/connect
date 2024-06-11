@@ -27,7 +27,6 @@ builder_children.adjust(2)
 
 builder_admins = keyboard.InlineKeyboardBuilder()
 builder_admins.button(text="Списки модулей", callback_data=AdminsCallbackFactory(action="modules_list"))
-builder_children.button(text="QR-коды #️⃣", web_app=WebAppInfo(url=f"{base_crod_url}/connect/showqr/admin"))
-# builder_children.button(text="Обратная связь 💬", web_app=WebAppInfo(url="https://vk.com"))
+builder_admins.button(text="QR-коды #️⃣", callback_data=AdminsCallbackFactory(action="qr_list"))
 builder_admins.button(text="Открыть Connect 💡", url=f"{base_crod_url}/connect")
 builder_admins.adjust(2)

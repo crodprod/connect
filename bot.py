@@ -350,6 +350,7 @@ async def cmd_start(message: types.Message):
             user_group = await get_user_group(telegram_id)
             rm = kb_main[user_group].as_markup()
 
+
         await bot.send_message(
             chat_id=telegram_id,
             text=message_text[user_group],
@@ -709,8 +710,22 @@ async def callbacks_admins(callback: types.CallbackQuery, callback_data: AdminsC
     user_status = await get_user_status('telegram_id', callback.from_user.id)
 
     if user_status == 'active':
+        print(action)
         if action == "modules_list":
             await get_module_list(callback)
+
+        elif action == "qr_list":
+            await callback.message.delete()
+            btn = keyboard.InlineKeyboardBuilder().button(
+                text="QR-коды #️⃣",
+                web_app=types.WebAppInfo(
+                    url=f"{base_crod_url}/connect/showqr/admin?initiator={callback.from_user.id}"
+                )
+            )
+            await callback.message.answer(
+                text="Нажмите на кнопку, чтобы посмотреть QR-коды",
+                reply_markup=btn.as_markup()
+            )
 
     else:
         await callback.answer(

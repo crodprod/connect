@@ -27,7 +27,7 @@ from flet_elements.telegram import send_telegam_message, send_telegram_document
 from flet_elements.functions import is_debug
 
 os.environ['FLET_WEB_APP_PATH'] = '/connect'
-os.environ['FLET_SESSION_TIMEOUT '] = '20'
+# os.environ['FLET_SESSION_TIMEOUT '] = '20'
 current_directory = os.path.dirname(os.path.abspath(__file__))
 parent_directory = os.path.dirname(current_directory)
 
