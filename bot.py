@@ -55,7 +55,6 @@ redis = RedisTable(
 )
 
 redis.connect()
-print(redis.result)
 
 statuses = {
     'feedback': True,
@@ -86,6 +85,7 @@ months = {
 # Заявка на изменение модуля
 
 def make_db_request(sql_query: str, params: tuple = ()):
+    db.connect()
     logging.info(f"Executing: {sql_query} ({params})")
     db.execute(sql_query, params)
     logging.info(db.result)
@@ -93,6 +93,8 @@ def make_db_request(sql_query: str, params: tuple = ()):
         return db.data
     else:
         logging.error(f"Error executing: {sql_query} ({params})")
+    db.disconnect()
+
 
 def get_text_link(title: str, link: str):
     return f"<a href='{link}'>{title}</a>"
@@ -104,7 +106,6 @@ def set_redis_hash(sign, index):
 
 async def is_pass_phrase_ok(table: str, pass_phrase: str):
     query = f"SELECT COUNT(*) as count FROM {table} WHERE pass_phrase = %s"
-    db.connect()
     result = make_db_request(query, (pass_phrase,))
 
     if result['count'] == 0:
@@ -112,34 +113,30 @@ async def is_pass_phrase_ok(table: str, pass_phrase: str):
     return True
 
 
-async def is_registered(telegram_id: int):
-    query = """
-    SELECT telegram_id FROM crodconnect.children WHERE telegram_id = %s
-    UNION
-    SELECT telegram_id FROM crodconnect.mentors WHERE telegram_id = %s
-    UNION
-    SELECT telegram_id FROM crodconnect.teachers WHERE telegram_id = %s
-    UNION 
-    SELECT telegram_id FROM crodconnect.admins WHERE telegram_id = %s;
-
-    """
-    db.connect()
-    result = make_db_request(query, (telegram_id, telegram_id, telegram_id, telegram_id,))
-    db.disconnect()
-    if result is None:
-        return False
-    return True
-
-
 async def get_user_info(telegram_id: int, group: str):
     query = f"SELECT * FROM {group} WHERE telegram_id = %s"
-    db.connect()
     result = make_db_request(query, (telegram_id,))
-    db.disconnect()
     return result
 
 
-async def get_user_status(telegram_id: int):
+async def get_user_status(column: str, value):
+    query = f"""
+            SELECT status FROM crodconnect.children WHERE {column} = {value}
+            UNION ALL
+            SELECT status FROM crodconnect.teachers WHERE {column} = {value}
+            UNION ALL
+            SELECT status FROM crodconnect.mentors WHERE {column} = {value}
+            UNION ALL 
+            SELECT status AS status FROM crodconnect.admins WHERE {column} = {value};
+    """
+
+    user_group = make_db_request(query)
+    if not user_group:
+        return 'alien'
+    return user_group['status']
+
+
+async def get_user_group(telegram_id: int):
     query = """
             SELECT 'children' AS status FROM crodconnect.children WHERE telegram_id = %s
             UNION ALL
@@ -149,18 +146,16 @@ async def get_user_status(telegram_id: int):
             UNION ALL 
             SELECT 'admins' AS status FROM crodconnect.admins WHERE telegram_id = %s;
             """
-    db.connect()
-    user_status = make_db_request(query, (telegram_id, telegram_id, telegram_id, telegram_id))
-    db.disconnect()
-    user_status = user_status['status'] if user_status else None
-    return user_status
+
+    user_group = make_db_request(query, (telegram_id, telegram_id, telegram_id, telegram_id))
+    return user_group['status']
 
 
 async def get_module_list(callback: types.CallbackQuery):
     query = "SELECT * FROM crodconnect.modules WHERE status = 'active'"
-    db.connect()
+
     modules = make_db_request(query)
-    db.disconnect()
+
     if len(modules) > 0:
         await callback.message.delete()
         btns_builder = keyboard.InlineKeyboardBuilder()
@@ -180,7 +175,7 @@ async def get_module_list(callback: types.CallbackQuery):
 
 async def send_hello(telegram_id: int, table: str):
     query = f"SELECT * FROM {table} WHERE telegram_id = %s and status = 'active'"
-    db.connect()
+
     user_info = make_db_request(query, (telegram_id,))
     if table == 'children':
         print(f"@{os.getenv('ID_CHANNEL')}", telegram_id)
@@ -244,7 +239,6 @@ async def send_hello(telegram_id: int, table: str):
             ),
             reply_markup=kb_hello[table].as_markup()
         )
-    db.disconnect()
 
 
 def update_env_var(variable, value):
@@ -271,9 +265,9 @@ async def send_reboot_message(telegram_id: int):
 
 async def get_module_children_list(module_id: int):
     query = "SELECT * FROM crodconnect.children WHERE id IN (SELECT child_id FROM crodconnect.modules_records WHERE module_id = %s)"
-    db.connect()
+
     group_list = make_db_request(query, (module_id,))
-    db.disconnect()
+
     group_list.sort(key=lambda el: el['name'])
 
     return group_list
@@ -281,26 +275,25 @@ async def get_module_children_list(module_id: int):
 
 async def get_module_feedback_today(module_id: int):
     query = "SELECT mark, comment FROM crodconnect.feedback WHERE module_id = %s and date = %s"
-    db.connect()
+
     feedback_list = make_db_request(query, (module_id, datetime.datetime.now().date()))
-    db.disconnect()
+
     return feedback_list
 
 
 @dp.message(CommandStart(deep_link=True, magic=F.args.regexp(re.compile(r'(children|mentors|teachers|admins|tasker)_\w+'))))
 async def deep_linking(message: Message, command: CommandObject):
-    # print(command.args)
     telegram_id = message.from_user.id
     target = command.args.split("_")[0]
     pass_phrase = command.args.split("_")[1]
 
     if target in ['children', 'mentors', 'teachers', 'admins']:
-        if not await is_registered(telegram_id):
+        if await get_user_status('telegram_id', telegram_id) == 'alien':
             if await is_pass_phrase_ok(target, pass_phrase):
                 query = f"UPDATE {target} SET telegram_id = %s WHERE pass_phrase = %s"
-                db.connect()
+
                 make_db_request(query, (telegram_id, pass_phrase,))
-                db.disconnect()
+
                 await send_hello(telegram_id, target)
         else:
             await cmd_start(message)
@@ -313,7 +306,6 @@ async def deep_linking(message: Message, command: CommandObject):
         tasker_users = load_config_file(path)
         fl = False
         for user in tasker_users:
-            # print(user)
             if user['login'] == pass_phrase:
                 fl = True
                 user['tid'] = message.chat.id
@@ -345,21 +337,24 @@ async def cmd_start(message: types.Message):
         'mentors': "<b>Выберите требуемое действие</b>",
         'teachers': "<b>Выберите требуемое действие</b>",
         'admins': "<b>Выберите требуемое действие</b>",
-        None: "Чтобы начать пользоваться ботом, тебе нужно <b>отсканировать свой личный QR-код.</b> "
-              "Если возникают трудности, обратись к воспитателям или администрации"
+        'frozen': "У вас временно <b>отсутствует доступ к боту.</b> Если вы считатете, что произошла ошибка, обратитесь к администрации",
+        'alien': "Чтобы начать пользоваться ботом, тебе нужно <b>отсканировать свой личный QR-код.</b> "
+                 "Если возникают трудности, обратись к воспитателям или администрации"
 
     }
     if str(telegram_id)[0] != '-':
-        user_status = await get_user_status(telegram_id)
+        user_status = await get_user_status('telegram_id', telegram_id)
+        user_group = user_status
 
-        if user_status is None:
+        if user_status in ['alien', 'frozen']:
             rm = None
         else:
-            rm = kb_main[user_status].as_markup()
+            user_group = await get_user_group(telegram_id)
+            rm = kb_main[user_group].as_markup()
 
         await bot.send_message(
             chat_id=telegram_id,
-            text=message_text[user_status],
+            text=message_text[user_group],
             reply_markup=rm
         )
     else:
@@ -375,43 +370,6 @@ async def cmd_start(message: types.Message):
                 text="<b>Управление радио</b>"
                      f"\n\n{text}",
                 reply_markup=radio_builder.as_markup()
-            )
-
-
-@dp.message(Command("setup"))
-async def handle_setup_commands(message: types.Message):
-    user_status = await get_user_status(message.from_user.id)
-    if user_status == 'admins':
-        command = message.text.split()
-        if len(command) == 2:
-            if command[1] in ['radio', 'errors', 'modules', 'fback']:
-                # update_env_var(f'ID_GROUP_{command[1].upper()}', message.chat.id)
-                await message.answer(
-                    text="<b>Изменение беседы</b>"
-                         f"\n\nДанная беседа установлена основной для <b>{command[1]}</b>"
-                )
-                await asyncio.sleep(1)
-                await send_reboot_message(message.chat.id)
-            elif command[1] == "channel":
-                await message.answer(
-                    text="<b>Изменение ссылки на Telegram-канал</b>"
-                         "\n\nОтправьте новый ник канала в формате _@название_канала_"
-                         "\n\nЕсли передумали, отправьте /start"
-                )
-            #     to-do: логика обновления ссылки на канал
-            else:
-                await message.answer(
-                    text="<b>Некорректная команда</b> \n\nДля изменения беседы отправьте"
-                         "\n/setup radio|errors|modules|fback"
-                         "\n\nДля изменения ссылки на Telegram-канал отправьте"
-                         "\n/setup channel"
-                )
-        else:
-            await message.answer(
-                text="<b>Некорректная команда</b> \n\nДля изменения беседы отправьте"
-                     "\n/setup radio|errors|modules|fback"
-                     "\n\nДля изменения ссылки на Telegram-канал отправьте"
-                     "\n/setup channel"
             )
 
 
@@ -435,9 +393,9 @@ async def start_radio(callback: types.CallbackQuery):
     )
     await callback.message.delete()
     query = "SELECT * FROM crodconnect.children where status = 'active'"
-    db.connect()
+
     children_list = make_db_request(query)
-    db.disconnect()
+
     for child in children_list:
         await bot.send_message(
             chat_id=child['telegram_id'],
@@ -470,14 +428,15 @@ async def send_random_value(callback: types.CallbackQuery):
 @dp.callback_query(MentorsCallbackFactory.filter())
 async def callbacks_mentors(callback: types.CallbackQuery, callback_data: MentorsCallbackFactory):
     action = callback_data.action
-    user_info = await get_user_info(callback.from_user.id, 'mentors')
-    if user_info is not None and user_info['status'] == 'active':
+    user_status = await get_user_status('telegram_id', callback.from_user.id)
+    if user_status == 'active':
+        user_info = await get_user_info(callback.from_user.id, 'mentors')
+
         if action == "grouplist":
             await callback.message.delete()
             query = "SELECT * FROM crodconnect.children where group_num = %s and status = 'active'"
-            db.connect()
+
             group_list = make_db_request(query, (user_info['group_num'],))
-            db.disconnect()
 
             msg = await callback.message.answer(
                 text="<b>Список группы создаётся...</b>"
@@ -495,13 +454,14 @@ async def callbacks_mentors(callback: types.CallbackQuery, callback_data: Mentor
             )
             if os.path.exists(filepath):
                 os.remove(filepath)
+
         elif action == "feedback":
             query = "SELECT COUNT(*) AS count FROM crodconnect.feedback WHERE child_id IN (SELECT id from crodconnect.children WHERE group_num = %s) AND date = %s"
-            db.connect()
+
             fb_count = make_db_request(query, (user_info['group_num'], datetime.datetime.now().date(),))['count']
             query = "SELECT COUNT(*) AS count from crodconnect.children WHERE group_num = %s"
             group_count = make_db_request(query, (user_info['group_num'],))['count']
-            db.disconnect()
+
             current_date = datetime.datetime.now().date().strftime('%d.%m.%Y')
 
             await callback.answer(
@@ -510,11 +470,12 @@ async def callbacks_mentors(callback: types.CallbackQuery, callback_data: Mentor
                 ),
                 show_alert=True
             )
+
         elif action == "births":
             query = "SELECT c.* FROM crodconnect.children c JOIN crodconnect.shift_info s ON c.birth < s.end_date AND c.birth >= s.start_date AND c.group_num = %s"
-            db.connect()
+
             birth_list = make_db_request(query, (user_info['group_num'],))
-            db.disconnect()
+
             birth_list.sort(key=lambda el: el['birth'])
             if len(birth_list) > 0:
                 await callback.message.delete()
@@ -530,16 +491,16 @@ async def callbacks_mentors(callback: types.CallbackQuery, callback_data: Mentor
                     text=lexicon['callback_alerts']['no_births_group'],
                     show_alert=True
                 )
+
         elif action == "modules_list":
             await get_module_list(callback)
+
         elif action == "qrc":
             await callback.message.delete()
             target = 'children'
             url = f"{base_crod_url}/connect/showqr?target={target}&value={user_info['group_num']}"
-            generator = generate_signed_url(url, SECRET_KEY)
-            signed_url, sign = generator[0], generator[1]
+            signed_url, sign = generate_signed_url(url, SECRET_KEY)
             set_redis_hash(sign, f"{target}{user_info['group_num']}")
-            print(signed_url)
             btn = keyboard.InlineKeyboardBuilder().button(
                 text="Показать QR-коды #️⃣",
                 web_app=types.WebAppInfo(
@@ -554,8 +515,7 @@ async def callbacks_mentors(callback: types.CallbackQuery, callback_data: Mentor
             await callback.message.delete()
             module_id = 1
             url = f"{base_crod_url}/connect/modulecheck?mentor_id={user_info['id']}&module_id={module_id}"
-            generator = generate_signed_url(url, SECRET_KEY)
-            signed_url, sign = generator[0], generator[1]
+            signed_url, sign = generate_signed_url(url, SECRET_KEY)
             set_redis_hash(sign, f"{user_info['id']}{module_id}")
             btn = keyboard.InlineKeyboardBuilder().button(
                 text="Отметить посещаемость",
@@ -568,13 +528,12 @@ async def callbacks_mentors(callback: types.CallbackQuery, callback_data: Mentor
                 reply_markup=btn.as_markup()
             )
 
-
-
     else:
         await callback.answer(
             text=lexicon['callback_alerts']['mentor_access_denied'],
             show_alert=True
         )
+
 
 
 @dp.callback_query(F.data == "check_apply")
@@ -624,12 +583,13 @@ async def callnacks_select_module(callback: types.CallbackQuery, callback_data: 
 @dp.callback_query(TeachersCallbackFactory.filter())
 async def callbacks_teachers(callback: types.CallbackQuery, callback_data: TeachersCallbackFactory):
     action = callback_data.action
-    user_info = await get_user_info(callback.from_user.id, 'teachers')
-    if user_info is not None and user_info['status'] == 'active':
+    user_status = await get_user_status('telegram_id', callback.from_user.id)
+
+    if user_status == 'active':
+        user_info = await get_user_info(callback.from_user.id, 'teachers')
         query = "SELECT * FROM crodconnect.modules WHERE id = %s"
-        db.connect()
+
         module_info = make_db_request(query, (user_info['module_id'],))
-        db.disconnect()
 
         if action == "grouplist":
             group_list = await get_module_children_list(user_info['module_id'])
@@ -708,7 +668,7 @@ async def feedback_mark_sended(message: Message, state: FSMContext):
     else:
         comment = message.text
     query = "INSERT INTO crodconnect.feedback (module_id, child_id, mark, comment, date) VALUES (%s, %s, %s, %s, %s)"
-    db.connect()
+
     make_db_request(query, (feedback['module_id'], user_info['id'], feedback['mark'], comment, datetime.datetime.now().date()))
     await bot.send_message(
         chat_id=os.getenv('ID_GROUP_FBACK'),
@@ -744,11 +704,11 @@ async def callbacks_radio(callback: types.CallbackQuery, callback_data: RadioReq
 @dp.callback_query(AdminsCallbackFactory.filter())
 async def callbacks_admins(callback: types.CallbackQuery, callback_data: AdminsCallbackFactory, state: FSMContext):
     action = callback_data.action
-    user_info = await get_user_info(callback.from_user.id, 'admins')
-    if user_info is not None and user_info['status'] == 'active':
+    user_status = await get_user_status('telegram_id', callback.from_user.id)
+
+    if user_status == 'active':
         if action == "modules_list":
             await get_module_list(callback)
-
 
     else:
         await callback.answer(
@@ -777,20 +737,20 @@ async def send_recorded_modules_info(child_id: int, callback: types.CallbackQuer
 @dp.callback_query(RecordModuleToChildCallbackFactory.filter())
 async def callbacks_children(callback: types.CallbackQuery, callback_data: RecordModuleToChildCallbackFactory, state: FSMContext):
     query = "INSERT INTO crodconnect.modules_records (child_id, module_id) VALUES (%s, %s)"
-    db.connect()
+
     make_db_request(query, (callback_data.child_id, callback_data.module_id,))
-    db.disconnect()
+
     await recording_to_module_process(callback_data.child_id, callback)
 
 
 async def generate_modules_list_to_record(child_id: int, callback: types.CallbackQuery):
     # выбрать модули, на которые чел не записан и на которых есть свободное место
     query = "SELECT * FROM crodconnect.modules WHERE id NOT IN (SELECT module_id FROM crodconnect.modules_records WHERE child_id = %s) AND seats_real < seats_max"
-    db.connect()
+
     modules_list = make_db_request(query, (child_id,))
     query = "SELECT COUNT(*) AS count FROM crodconnect.modules_records WHERE child_id = %s"
     recorded_modules_count = make_db_request(query, (child_id,))['count']
-    db.disconnect()
+
     if modules_list is not None:
         builder = keyboard.InlineKeyboardBuilder()
 
@@ -805,7 +765,7 @@ async def generate_modules_list_to_record(child_id: int, callback: types.Callbac
 
 async def recording_to_module_process(child_id: int, callback: types.CallbackQuery):
     query = "SELECT * FROM crodconnect.modules_records WHERE child_id = %s"
-    db.connect()
+
     modules_records_list = make_db_request(query, (child_id,))
     if len(modules_records_list) > 0:
         await callback.message.delete()
@@ -841,7 +801,7 @@ async def create_feedback_proccess(user_info: [], callback: types.CallbackQuery,
     feedback_temp_data_dict[user_info['id']] = {}
 
     query = "SELECT * FROM crodconnect.modules WHERE id IN (SELECT module_id FROM crodconnect.modules_records WHERE child_id = %s) AND id NOT IN (SELECT module_id FROM crodconnect.feedback WHERE child_id = %s AND date = %s)"
-    db.connect()
+
     need_to_give_feedback_list = make_db_request(query, (user_info['id'], user_info['id'], datetime.datetime.now().date(),))
     if len(need_to_give_feedback_list) > 0:
         module = need_to_give_feedback_list[0]
@@ -872,8 +832,10 @@ async def create_feedback_proccess(user_info: [], callback: types.CallbackQuery,
 @dp.callback_query(ChildrenCallbackFactory.filter())
 async def callbacks_children(callback: types.CallbackQuery, callback_data: ChildrenCallbackFactory, state: FSMContext):
     action = callback_data.action
-    user_info = await get_user_info(callback.from_user.id, 'children')
-    if user_info is not None and user_info['status'] == 'active':
+    user_status = await get_user_status('telegram_id', callback.from_user.id)
+
+    if user_status == 'active':
+        user_info = await get_user_info(callback.from_user.id, 'children')
         if action == "modules":
             await recording_to_module_process(user_info['id'], callback)
 
@@ -927,7 +889,7 @@ async def callbacks_children(callback: types.CallbackQuery, callback_data: Child
 async def start_feedback():
     statuses['feedback'] = True
     query = "SELECT * FROM crodconnect.children WHERE status = %s"
-    db.connect()
+
     children_list = make_db_request(query, ('active',))
     for child in children_list:
         if child['telegram_id']:
@@ -941,7 +903,7 @@ async def start_feedback():
 async def stop_feedback():
     statuses['feedback'] = False
     query = "SELECT * FROM crodconnect.teachers WHERE status = 'active'"
-    db.connect()
+
     teachers_list = make_db_request(query)
     for teacher in teachers_list:
         query = "SELECT * FROM crodconnect.feedback WHERE date = %s AND module_id = %s"
