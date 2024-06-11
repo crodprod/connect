@@ -1623,7 +1623,7 @@ def main(page: ft.Page):
 
     def get_showqr(target: str, value: str = None, admin: bool = False):
         page.scroll = ft.ScrollMode.HIDDEN
-        # page.appbar.visible = False
+        page.appbar.visible = admin
         # dlg_loading.loading_text = "Загрузка"
         # dlg_loading.open()
 
@@ -1855,8 +1855,8 @@ def main(page: ft.Page):
         page.window_height = 768
         # page.route = "/"
         # page.route = "/modulecheck?mentor_id=26&module_id=1&initiator=409801981&signature=2f686ce6a26f9d7da3b8640d41e263de509a480d5712d8a6783996c7e9317f45"
-        # page.route = "/showqr/mentor?target=children&value=3&initiator=409801981&signature=574c436784b7f040165534dafb02b301a8c63c388ade48b15f3b798d2841d035"
-        page.route = "/showqr/admin?initiator=409801981"
+        page.route = "/showqr/mentor?target=children&value=3&initiator=409801981&signature=16066ad78b34eba8572ac2f68acd0b376c73afe9f446383e09cdc7928dbd0aa5"
+        # page.route = "/showqr/admin?initiator=409801981"
 
     # Точка входа
     url = urlparse(page.route)
