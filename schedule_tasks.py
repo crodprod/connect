@@ -19,8 +19,9 @@ else:
 load_dotenv(dotenv_path=env_path)
 
 yandex = yadiskapi.YandexAPI(os.getenv('YANDEX_REST_URL'), os.getenv('YANDEX_REST_TOKEN'))
-backup_time = "02:00"
+backup_time = os.getenv('DB_BACKUP_TIME')
 logging.info(f'Backup: time to backup is {backup_time}')
+
 
 def mysql_backup():
     logging.info('Backup: wake up')
