@@ -266,6 +266,7 @@ async def get_module_children_list(module_id: int):
     query = "SELECT * FROM crodconnect.children WHERE id IN (SELECT child_id FROM crodconnect.modules_records WHERE module_id = %s)"
 
     group_list = make_db_request(query, (module_id,))
+    if type(group_list) == dict: group_list = [group_list]
 
     group_list.sort(key=lambda el: el['name'])
 
@@ -276,6 +277,7 @@ async def get_module_feedback_today(module_id: int):
     query = "SELECT mark, comment FROM crodconnect.feedback WHERE module_id = %s and date = %s"
 
     feedback_list = make_db_request(query, (module_id, datetime.datetime.now().date()))
+    if type(feedback_list) == dict: feedback_list = [feedback_list]
 
     return feedback_list
 
