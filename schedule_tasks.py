@@ -54,7 +54,7 @@ def mysql_backup():
     )
 
 
-schedule.every().day.at("02:21").do(mysql_backup)
+schedule.every().day.at("02:23").do(mysql_backup)
 
 while True:
     schedule.run_pending()
