@@ -59,7 +59,7 @@ def mysql_backup():
 
     send_telegam_message(
         tID=os.getenv('ID_GROUP_ERRORS'),
-        message_text=f"*Бекап базы данных*\n\n{text}"
+        message_text=f"*Бекап базы данных*\n\n{text}\n\n#бекап"
     )
 
 
@@ -68,9 +68,11 @@ schedule.every().day.at(backup_time).do(mysql_backup)
 send_telegam_message(
     tID=os.getenv('ID_GROUP_ERRORS'),
     message_text=f"*Бекап базы данных*"
-                 f"\n\nАвтоматический бекап ежедневно в {backup_time}"
+                 f"\n\nАвтоматический бекап ежедневно в {backup_time}\n\n#бекап"
 )
 
+logging.info('Scheduler: started')
+print(schedule.get_jobs())
 while True:
     schedule.run_pending()
     time.sleep(1)
