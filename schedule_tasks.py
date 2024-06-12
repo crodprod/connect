@@ -1,14 +1,14 @@
 import os
 import platform
 import subprocess
-
 import schedule
 import time
-from datetime import datetime
-
-from dotenv import load_dotenv
+import logging
 
 import yadiskapi
+
+from datetime import datetime
+from dotenv import load_dotenv
 from flet_elements.telegram import send_telegam_message
 
 if platform.system() == "Windows":
@@ -17,42 +17,43 @@ else:
     env_path = r"/root/crod/.env"
 
 load_dotenv(dotenv_path=env_path)
-print(os.getenv('YANDEX_REST_URL'))
-yandex = yadiskapi.YandexAPI(os.getenv('YANDEX_REST_URL'), os.getenv('YANDEX_REST_TOKEN'))
 
+yandex = yadiskapi.YandexAPI(os.getenv('YANDEX_REST_URL'), os.getenv('YANDEX_REST_TOKEN'))
+backup_time = "02:00"
+logging.info(f'Backup: time to backup is {backup_time}')
 
 def mysql_backup():
+    logging.info('Backup: wake up')
     filename = f"crodconnect_backup_{datetime.now().strftime('%Y-%m-%d-%H-%M')}.sql"
     filepath = f"/root/crod/backups/{filename}"
+    logging.info(f'Backup: creating {filename}')
 
     command = f"mysqldump -h 127.0.0.1 -P {3310} -u {os.getenv('DB_USER')} -p{os.getenv('DB_PASSWORD')} crodconnect > {filepath}"
 
     text = f"*Статус:* ✅ создан" \
            f"\n*Файл:* {filename}"
 
-    print(filename)
-    print(filepath)
-    print(command)
     try:
-        print('start sub')
+        logging.info('Backup: running subprocess')
         subprocess.run(command, shell=True)
 
-        print('getting response')
+        logging.info('Backup: getting upload link')
         response = yandex.get_upload_link(f'CROD_MEDIA/Бекапы/{filename}')
         if 'href' in response.keys():
-            print('response ok')
+            logging.info('Backup: upload link recieved, uploading file')
             yandex.upload_file(
                 url=response['href'],
                 filepath=filepath
             )
+            logging.info('Backup: file uploaded to Yandex.Disk')
 
         else:
-            print('response error')
+            logging.error(f"Backup: upload link recieve failed: {response['message']}")
             text = f"*Статус:* ⛔ не создан" \
                    f"\n*Ошибка:* {response['message']}"
 
     except Exception as e:
-        print('main error')
+        logging.error(f"Backup: {e}")
         text = f"*Статус:* ⛔ не создан" \
                f"\n*Ошибка:* {e}"
 
@@ -62,9 +63,14 @@ def mysql_backup():
     )
 
 
-mysql_backup()
-# schedule.every().day.at("02:23").do(mysql_backup)
+schedule.every().day.at(backup_time).do(mysql_backup)
 
-# while True:
-#     schedule.run_pending()
-#     time.sleep(1)
+send_telegam_message(
+    tID=os.getenv('ID_GROUP_ERRORS'),
+    message_text=f"*Бекап базы данных*"
+                 f"\n\nАвтоматический бекап ежедневно в {backup_time}"
+)
+
+while True:
+    schedule.run_pending()
+    time.sleep(1)
