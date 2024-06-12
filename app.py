@@ -2079,5 +2079,5 @@ if __name__ == "__main__":
             target=main,
             assets_dir='assets',
             upload_dir='assets/uploads',
-            # port=8001
+            port=8001
         )
