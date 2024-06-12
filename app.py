@@ -84,6 +84,7 @@ def url_sign_check(sign: str, index: str):
             else:
                 response = -1
         logging.info(f"Redis: signature finded")
+        redis.delete(index)
         return response
     except Exception as e:
         logging.error(f"Redis: {e}")
@@ -135,6 +136,7 @@ def main(page: ft.Page):
                 width=600, size=16, weight=ft.FontWeight.W_200
             )
             dlg_info.open()
+            db.reconnect()
 
     def is_telegrammed(target: str = None):
         messages = {
@@ -167,6 +169,7 @@ def main(page: ft.Page):
         }
 
         if response in (0, -1, -2):
+            change_screen("errors")
             dlg_info.title = "Ошибка доступа"
             dlg_info.content = ft.Text(text[response], width=600, size=16, weight=ft.FontWeight.W_200)
             dlg_info.open(action_btn_visible=False)
@@ -1661,7 +1664,6 @@ def main(page: ft.Page):
                             on_click=get_user_qr
                         )
                     )
-                    users_col.controls.append(ft.Divider(thickness=1))
 
                 back_btn = ft.IconButton(ft.icons.ARROW_BACK_IOS_NEW, visible=admin, on_click=lambda _: change_screen('select_qr_group'))
                 qr_screen_col.controls = [
@@ -1855,7 +1857,7 @@ def main(page: ft.Page):
         page.window_height = 768
         # page.route = "/"
         # page.route = "/modulecheck?mentor_id=26&module_id=1&initiator=409801981&signature=2f686ce6a26f9d7da3b8640d41e263de509a480d5712d8a6783996c7e9317f45"
-        page.route = "/showqr/mentor?target=children&value=3&initiator=409801981&signature=16066ad78b34eba8572ac2f68acd0b376c73afe9f446383e09cdc7928dbd0aa5"
+        page.route = "/showqr/mentor?target=children&value=3&initiator=409801981&signature=654962104fc3627e1bae115b3bb54255cd9338021de9d03cb7c5db5c858bf055"
         # page.route = "/showqr/admin?initiator=409801981"
 
     # Точка входа
@@ -1911,7 +1913,7 @@ def main(page: ft.Page):
 
 if __name__ == "__main__":
     if platform.system() == "Windows":
-        os.environ['DEBUG'] = "0"
+        os.environ['DEBUG'] = "1"
     if is_debug():
         ft.app(
             target=main,
