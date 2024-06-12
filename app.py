@@ -271,9 +271,7 @@ def main(page: ft.Page):
             },
         }
         if is_debug():
-            print('ok3')
             status_value = False
-            print('ok4')
         else:
             status_value = check_systemd(target)
         card = ft.Card(
@@ -1999,12 +1997,10 @@ def main(page: ft.Page):
         ],
     )
 
-    page.route = "/"
     if is_debug():
-        print('ok5')
         page.window_width = 377
         page.window_height = 768
-
+        page.route = "/"
         # page.route = "/modulecheck?mentor_id=26&module_id=1&initiator=409801981&signature=2f686ce6a26f9d7da3b8640d41e263de509a480d5712d8a6783996c7e9317f45"
         # page.route = "/showqr/mentor?target=children&value=3&initiator=409801981&signature=654962104fc3627e1bae115b3bb54255cd9338021de9d03cb7c5db5c858bf055"
         # page.route = "/showqr/admin?initiator=409801981"
@@ -2018,7 +2014,6 @@ def main(page: ft.Page):
     if all([fl[1]['status'] for fl in startup.items()]):
         if not url_path[0]:
             if is_debug():
-                print('ok6')
                 password_field.value = "lrrrtm"
                 change_screen("login")
                 login()
@@ -2065,7 +2060,6 @@ if __name__ == "__main__":
     if platform.system() == "Windows":
         os.environ['DEBUG'] = "0"
     if is_debug():
-        print('ok1')
         ft.app(
             target=main,
             assets_dir='assets',
@@ -2073,7 +2067,6 @@ if __name__ == "__main__":
             # view=ft.AppView.WEB_BROWSER,
             # port=8001
         )
-        print('ok1')
     else:
         ft.app(
             target=main,
