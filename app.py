@@ -9,6 +9,7 @@ import time
 import flet as ft
 import qrcode
 import redis
+import requests
 import xlrd
 from dotenv import load_dotenv
 from urllib.parse import urlparse, parse_qs
@@ -27,7 +28,6 @@ from flet_elements.telegram import send_telegam_message, send_telegram_document
 from flet_elements.functions import is_debug
 
 os.environ['FLET_WEB_APP_PATH'] = '/connect'
-# os.environ['FLET_SESSION_TIMEOUT '] = '20'
 current_directory = os.path.dirname(os.path.abspath(__file__))
 parent_directory = os.path.dirname(current_directory)
 
@@ -37,13 +37,10 @@ else:
     env_path = r"/root/crod/.env"
 load_dotenv(dotenv_path=env_path)
 
-if not os.path.exists(os.path.join(current_directory, 'assets/qrc')):
-    logging.info(f'Creating folder assets/qrc')
-    os.mkdir(os.path.join(current_directory, 'assets/qrc'))
-
-if not os.path.exists(os.path.join(current_directory, 'wording/generated')):
-    logging.info(f'Creating folder wording/generated')
-    os.mkdir(os.path.join(current_directory, 'wording/generated'))
+for path in ['assets/qrc', 'wording/generated', 'wording/qr']:
+    if not os.path.exists(os.path.join(current_directory, path)):
+        logging.info(f'Creating folder {path}')
+        os.mkdir(os.path.join(current_directory, path))
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s")
@@ -72,6 +69,9 @@ redis = RedisTable(
     port=os.getenv('REDIS_PORT'),
     password=os.getenv('REDIS_PASSWORD')
 )
+
+os.environ['BOT_NAME'] = requests.get(url=f"https://api.telegram.org/bot{os.getenv('BOT_TOKEN')}/getMe").json()['result']['username']
+logging.info(f"BOT_NAME: {os.getenv('BOT_NAME')}")
 
 
 def url_sign_check(sign: str, index: str):
@@ -1663,7 +1663,7 @@ def main(page: ft.Page):
                     )
                     users_col.controls.append(ft.Divider(thickness=1))
 
-                back_btn = ft.IconButton(ft.icons.ARROW_BACK_IOS_NEW, visible=admin, on_click=lambda _:change_screen('select_qr_group'))
+                back_btn = ft.IconButton(ft.icons.ARROW_BACK_IOS_NEW, visible=admin, on_click=lambda _: change_screen('select_qr_group'))
                 qr_screen_col.controls = [
                     ft.Card(
                         ft.Container(
