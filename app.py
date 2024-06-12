@@ -615,7 +615,8 @@ def main(page: ft.Page):
                 query = "SELECT * FROM crodconnect.modules WHERE status = 'active'"
                 modules_list = make_db_request(query)
 
-                if modules_list is not None:
+                if db.result['status'] == 'ok':
+                    if type(modules_list) == dict: modules_list = [modules_list]
                     if modules_list:
                         merger = PdfMerger()
 
@@ -626,11 +627,12 @@ def main(page: ft.Page):
                             query = "SELECT * FROM crodconnect.teachers WHERE module_id = %s"
                             teacher_info = make_db_request(query, (module['id'],))
 
-                            if teacher_info is not None:
+                            if db.result['status'] == "ok":
                                 query = "SELECT * FROM crodconnect.children WHERE id in (SELECT child_id FROM crodconnect.modules_records WHERE module_id = %s)"
                                 children_list = make_db_request(query, (module['id'],))
 
-                                if children_list is not None:
+                                if db.result['status'] == "ok":
+                                    if type(children_list) == dict: children_list = [children_list]
                                     if children_list:
                                         children_list.sort(key=lambda el: el['name'])
 
@@ -670,7 +672,8 @@ def main(page: ft.Page):
                 query = "SELECT * FROM crodconnect.modules WHERE status = 'active'"
                 modules = make_db_request(query)
 
-                if modules is not None:
+                if db.result['status'] == "ok":
+                    if type(modules) == dict: modules = [modules]
                     navigation_filename = wording.wording.get_modules_navigation(modules, shift_name['name'])
                     filepath = f"{current_directory}/wording/generated/{navigation_filename}.pdf"
 
