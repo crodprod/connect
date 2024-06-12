@@ -35,7 +35,7 @@ def mysql_backup():
     print(command)
     try:
         print('start sub')
-        subprocess.run(command)
+        subprocess.run(command, shell=True)
 
         print('getting response')
         response = yandex.get_upload_link(f'CROD_MEDIA/Бекапы/{filename}')
