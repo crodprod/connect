@@ -1913,7 +1913,7 @@ def main(page: ft.Page):
 
 if __name__ == "__main__":
     if platform.system() == "Windows":
-        os.environ['DEBUG'] = "1"
+        os.environ['DEBUG'] = "0"
     if is_debug():
         ft.app(
             target=main,
