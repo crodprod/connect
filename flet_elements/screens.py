@@ -2,7 +2,7 @@ from flet import icons, ScrollMode
 
 menu_icon = icons.MENU
 back_icon = icons.ARROW_BACK_ROUNDED
-base_scroll_mode = ScrollMode.HIDDEN
+base_scroll_mode = ScrollMode.AUTO
 
 screens = {
     'login': {
@@ -171,7 +171,7 @@ screens = {
             },
             'title': "Конфигурация"
         },
-        'scroll_mode': ScrollMode.HIDDEN
+        'scroll_mode': base_scroll_mode
     },
     'select_qr_group': {
         'appbar': {
@@ -183,7 +183,7 @@ screens = {
             },
             'title': "QR-коды"
         },
-        'scroll_mode': ScrollMode.HIDDEN
+        'scroll_mode': base_scroll_mode
     },
     'errors': {
         'appbar': {
