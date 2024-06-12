@@ -29,7 +29,7 @@ radio_kb = keyboard.InlineKeyboardBuilder(
 check_apply_to_channel_kb = keyboard.InlineKeyboardBuilder(
     markup=[
         [keyboard.InlineKeyboardButton(text="Подписаться", url=f"https://t.me/{os.getenv('ID_CHANNEL')}")],
-        [keyboard.InlineKeyboardButton(text="Я подписался (-ась)!", callback_data="check_apply")]
+        [keyboard.InlineKeyboardButton(text="✅ Я подписался (-ась)!", callback_data="check_apply")]
     ]
 )
 
