@@ -1,5 +1,12 @@
 {
   "modules_count": 2,
+  "shift": {
+    "name": "Летняя физико-математическая школа",
+    "date": {
+      "start": "2024-06-08",
+      "end": "2024-07-10"
+    }
+  },
   "auto_actions": {
     "start_feedback": {
       "hour": 16,

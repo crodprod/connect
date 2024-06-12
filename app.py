@@ -1,3 +1,4 @@
+import datetime
 import logging
 import math
 import os
@@ -18,14 +19,16 @@ from pypdf import PdfMerger
 from transliterate import translit
 
 import wording.wording
+from bot_elements.functions import load_config_file
 from database import MySQL, RedisTable
+from flet_elements.classes import NewModule, NewAdmin, NewMentor, NewChild
 from flet_elements.dialogs import InfoDialog, LoadingDialog, BottomSheet
 from flet_elements.functions import remove_folder_content, get_hello, get_system_list
-from flet_elements.modules_locations import locations
 from flet_elements.screens import screens
 from flet_elements.systemd import reboot_systemd, check_systemd
 from flet_elements.telegram import send_telegam_message, send_telegram_document
 from flet_elements.functions import is_debug
+from flet_elements.user_statuses import user_statuses
 
 os.environ['FLET_WEB_APP_PATH'] = '/connect'
 current_directory = os.path.dirname(os.path.abspath(__file__))
@@ -46,10 +49,6 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s")
 
 startup = {
-    'mysql': {
-        'status': True,
-        'msg': ""
-    },
     'redis': {
         'status': True,
         'msg': ""
@@ -107,17 +106,14 @@ def main(page: ft.Page):
     }
 
     remaining_children_traffic = []
+    child_col = ft.ListView()
 
     dlg_loading = LoadingDialog(page=page)
     dlg_info = InfoDialog(page=page)
     bottom_sheet = BottomSheet(page=page)
 
-    db.connect()
     redis.connect()
-
-    if db.result['status'] == "error":
-        startup['mysql']['status'] = False
-        startup['mysql']['msg'] = db.result['message']
+    db.connect()
 
     if redis.result['status'] == "error":
         startup['redis']['status'] = False
@@ -125,6 +121,7 @@ def main(page: ft.Page):
 
     def make_db_request(sql_query: str, params: tuple = ()):
         db.execute(sql_query, params)
+
         if db.result['status'] == "ok":
             return db.data
         else:
@@ -136,7 +133,6 @@ def main(page: ft.Page):
                 width=600, size=16, weight=ft.FontWeight.W_200
             )
             dlg_info.open()
-            db.reconnect()
 
     def is_telegrammed(target: str = None):
         messages = {
@@ -152,12 +148,43 @@ def main(page: ft.Page):
             return False
         return True
 
-    # def raise_error(location, error_message: str, screen: str):
-    #     if location == dialog_loading:
-    #         dlg_loading.close()
-    #         open_sb(error_message, ft.colors.RED)
-    #         if "createdoc" in screen:
-    #             change_screen("documents")
+    def change_child_group(e: ft.ControlEvent):
+        child = e.control.data
+        bottom_sheet.title = "Изменение группы"
+        bottom_sheet.height = 120
+        bottom_sheet.content = ft.Column(
+            [
+                ft.Text(f"{child['name']}\nВыберите новую группу", size=16, weight=ft.FontWeight.W_200),
+                ft.Row(
+                    controls=[
+                        ft.FilledTonalButton(text='1', on_click=lambda _: set_child_group(1)),
+                        ft.FilledTonalButton(text='2', on_click=lambda _: set_child_group(2)),
+                        ft.FilledTonalButton(text='3', on_click=lambda _: set_child_group(3)),
+                        ft.FilledTonalButton(text='4', on_click=lambda _: set_child_group(4)),
+                        ft.FilledTonalButton(text='5', on_click=lambda _: set_child_group(5))
+                    ],
+                    scroll=ft.ScrollMode.AUTO
+                )
+            ],
+            width=600
+        )
+        bottom_sheet.open()
+        bottom_sheet.sheet.data = child
+
+    def find_child(e: ft.ControlEvent):
+        data = page.session.get('children_list')
+        child_col.controls.clear()
+        for child in data:
+            if e.control.value in child['name']:
+                child_col.controls.append(
+                    ft.ListTile(
+                        title=ft.Text(child['name'], size=16),
+                        subtitle=ft.Text(f"Группа №{child['group_num']}", size=14),
+                        data=child,
+                        on_click=change_child_group
+                    )
+                )
+        page.update()
 
     def check_url(sign, index):
         response = url_sign_check(sign, index)
@@ -244,7 +271,9 @@ def main(page: ft.Page):
             },
         }
         if is_debug():
+            print('ok3')
             status_value = False
+            print('ok4')
         else:
             status_value = check_systemd(target)
         card = ft.Card(
@@ -272,13 +301,8 @@ def main(page: ft.Page):
 
         return card
 
-    def appbar_action_selected(e: ft.ControlEvent):
-        data = e.control.data
-        print(data)
-
     def drawer_element_selected(e: ft.ControlEvent):
         data = e.control.data
-        print(data)
 
         page.drawer.open = False
         page.update()
@@ -326,15 +350,14 @@ def main(page: ft.Page):
     def create_passphrase(name):
         name = re.sub(r'[^a-zA-Zа-яА-ЯёЁ]', '', translit(''.join(name.split()[:2]), language_code='ru', reversed=True))
         phrase = f"{name}{os.urandom(3).hex()}"
-        # print(phrase)
 
         return phrase
 
     def add_new_mentor():
         query = "INSERT INTO crodconnect.mentors (name, group_num, pass_phrase) VALUES (%s, %s, %s)"
-        name = new_mentor_name_field.value.strip()
+        name = new_mentor.name.value.strip()
         pass_phrase = create_passphrase(name)
-        response = make_db_request(query, (name, new_mentor_group_dd.value, pass_phrase))
+        response = make_db_request(query, (name, new_mentor.group.value, pass_phrase))
         if response is not None:
             change_screen("mentors_info")
             open_sb("Воспитатель добавлен", ft.colors.GREEN)
@@ -343,13 +366,13 @@ def main(page: ft.Page):
         dlg_loading.loading_text = "Добавляем модуль"
         dlg_loading.open()
         query = "INSERT INTO crodconnect.modules (name, seats_max, location) VALUES (%s, %s, %s)"
-        make_db_request(query, (new_module_name_field.value, new_module_seats_field.value, new_module_location_dd.value))
+        make_db_request(query, (new_module.module_name.value, new_module.seats_count.value, new_module.locations_dropdown.value))
 
         query = "SELECT id FROM crodconnect.modules WHERE name = %s"
-        module_id = make_db_request(query, (new_module_name_field.value,))['id']
+        module_id = make_db_request(query, (new_module.module_name.value,))['id']
 
         query = "INSERT INTO crodconnect.teachers (name, module_id, pass_phrase) VALUES (%s, %s, %s)"
-        name = new_module_teacher_name_field.value.strip()
+        name = new_module.teacher_name.value.strip()
         pass_phrase = create_passphrase(name)
 
         response = make_db_request(query, (name, module_id, pass_phrase,))
@@ -360,7 +383,7 @@ def main(page: ft.Page):
 
     def add_new_admin():
         query = "INSERT INTO crodconnect.admins (name, pass_phrase, password) VALUES (%s, %s, %s)"
-        name = new_admin_name_field.value.strip()
+        name = new_admin.name.value.strip()
         pass_phrase = create_passphrase(name)
         password = os.urandom(3).hex()
         response = make_db_request(query, (name, pass_phrase, password,))
@@ -370,17 +393,39 @@ def main(page: ft.Page):
 
     def remove_mentor(e: ft.ControlEvent):
         query = "DELETE FROM crodconnect.mentors WHERE pass_phrase = %s"
-        response = make_db_request(query, (e.control.data,))
-        if response is not None:
+        make_db_request(query, (e.control.data,))
+        if db.result['status'] == "ok":
             open_sb("Воспитатель удалён")
             change_screen("mentors_info")
 
     def remove_admin(e: ft.ControlEvent):
         query = "DELETE FROM crodconnect.admins WHERE pass_phrase = %s"
-        response = make_db_request(query, (e.control.data,))
-        if response is not None:
+        make_db_request(query, (e.control.data,))
+        if db.result['status'] == "ok":
             open_sb("Администратор удалён")
             change_screen("admins_info")
+
+    def remove_module(e: ft.ControlEvent):
+        dlg_loading.loading_text = "Удаление модуля"
+        dlg_loading.open()
+        pass_phrase = page.session.get('remove_module_pass_phrase')
+        page.session.remove('remove_module_pass_phrase')
+
+        query = """
+        DELETE FROM crodconnect.modules_records WHERE module_id = (SELECT module_id FROM crodconnect.teachers WHERE pass_phrase = %s);
+        DELETE FROM crodconnect.modules WHERE id = (SELECT module_id FROM crodconnect.teachers WHERE pass_phrase = %s);
+        DELETE FROM crodconnect.teachers WHERE pass_phrase = %s;
+        """
+        make_db_request(query, (pass_phrase, pass_phrase, pass_phrase,))
+        time.sleep(2)
+        dlg_loading.close()
+        if db.result['status'] == "ok":
+            open_sb("Модуль удалён")
+            change_screen("modules_info")
+
+    def goto_remove_module(e: ft.ControlEvent):
+        page.session.set('remove_module_pass_phrase', e.control.data)
+        open_confirmation('remove_module')
 
     def goto_change_mentor_group(e: ft.ControlEvent):
         bottom_sheet.title = "Изменение группы"
@@ -403,45 +448,55 @@ def main(page: ft.Page):
         bottom_sheet.open()
         bottom_sheet.sheet.data = e.control.data
 
-    def change_mentor_group(new_group):
+    def set_child_group(new_group: int):
+        bottom_sheet.close()
+        dlg_loading.loading_text = "Обновляем"
+        dlg_loading.open()
+
+        child = bottom_sheet.sheet.data
+
+        query = "UPDATE crodconnect.children SET group_num = %s WHERE pass_phrase = %s"
+        make_db_request(query, (new_group, child['pass_phrase'],))
+        dlg_loading.close()
+        if db.result['status'] == "ok":
+            dlg_info.title = "Изменение группы"
+            dlg_info.content = ft.Text(
+                f"{child['name']} переведен(-а) в группу №{new_group}",
+                width=600, size=16, weight=ft.FontWeight.W_200
+            )
+            dlg_info.open()
+
+            query = "SELECT * FROM crodconnect.mentors WHERE group_num = %s AND status = 'active'"
+            mentors = make_db_request(query, (new_group,))
+            if type(mentors) == dict: mentors = [mentors]
+            for mentor in mentors:
+                send_telegam_message(
+                    tID=mentor['telegram_id'],
+                    message_text=f"{' '.join(mentor['name'].split()[1:])}, в вашу группу переведен(-а) *{child['name']}*"
+                                 f"\n\n*Дата рождения:* {child['birth']}"
+                                 f"\n*Особенности:* {child['comment']}"
+                                 f"\n*Родитель:* {child['parrent_name']} ({child['parrent_phone']})"
+                )
+
+    def change_mentor_group(new_group: int):
         bottom_sheet.close()
         dlg_loading.loading_text = "Обновляем"
         dlg_loading.open()
         query = "UPDATE crodconnect.mentors SET group_num = %s WHERE pass_phrase = %s"
-        response = make_db_request(query, (new_group, bottom_sheet.sheet.data,))
+        make_db_request(query, (new_group, bottom_sheet.sheet.data,))
         dlg_loading.close()
-        if response is not None:
+        if db.result['status'] == "ok":
             change_screen('mentors_info')
             open_sb("Группа изменена", ft.colors.GREEN)
 
             query = "SELECT telegram_id from crodconnect.mentors WHERE pass_phrase = %s"
             mentor_tid = make_db_request(query, (bottom_sheet.sheet.data,))['telegram_id']
-            if mentor_tid is not None:
+            if db.result['status'] == "ok":
                 send_telegam_message(
                     tID=mentor_tid,
                     message_text="*Изменение группы*"
                                  f"\n\nВы были переведены администратором в *группу №{new_group}*"
                 )
-
-    def validate(target: str):
-        if target == "mentor":
-            if len(new_mentor_name_field.value.strip().split(" ")) in [2, 3] and new_mentor_group_dd.value is not None:
-                btn_add_mentor.disabled = False
-            else:
-                btn_add_mentor.disabled = True
-        elif target == "admin":
-            if len(new_admin_name_field.value.strip().split(" ")) in [2, 3]:
-                btn_add_admin.disabled = False
-            else:
-                btn_add_admin.disabled = True
-        elif target == "module":
-            if len(new_module_teacher_name_field.value.strip().split()) in [2, 3] and new_module_location_dd.value is not None and \
-                    new_module_seats_field.value.isnumeric() and new_module_name_field.value:
-                btn_add_module.disabled = False
-            else:
-                btn_add_module.disabled = True
-
-        page.update()
 
     def open_menu_drawer(e):
         page.drawer.open = True
@@ -688,11 +743,10 @@ def main(page: ft.Page):
             page.add(ft.Container(login_col, expand=True))
 
         elif target == "main":
+            shift_info = load_config_file('config.json')['shift']
             query = "SELECT * FROM crodconnect.admins WHERE password = %s"
             admin = make_db_request(query, (password_field.value,))
 
-            view_pb = ft.ProgressBar()
-            fback_pb = ft.ProgressBar()
             systemd_pb = ft.ProgressBar()
 
             systemd_text = ft.Text(size=16)
@@ -717,10 +771,76 @@ def main(page: ft.Page):
                 width=600
             )
 
+            shift_info_col = ft.Column()
+            start_date = datetime.datetime.strptime(shift_info['date']['start'], '%Y-%m-%d')
+            end_date = datetime.datetime.strptime(shift_info['date']['end'], '%Y-%m-%d')
+            current_date = datetime.datetime.now()
+
+            if start_date <= current_date <= end_date:
+                shift_info_col.controls = [
+                    ft.Container(
+                        ft.Column(
+                            [
+                                ft.Container(
+                                    ft.ListTile(
+                                        title=ft.Text("Название смены/потока", size=14),
+                                        subtitle=ft.Text(shift_info['name'], size=16, weight=ft.FontWeight.W_400)
+                                    ),
+                                    padding=ft.padding.only(bottom=-30)
+                                ),
+                                ft.Container(
+                                    ft.ListTile(
+                                        title=ft.Text("Дата начала", size=14),
+                                        subtitle=ft.Text(start_date.strftime('%d.%m.%Y'), size=16, weight=ft.FontWeight.W_400)
+                                    ),
+                                    padding=ft.padding.only(bottom=-30)
+                                ),
+                                ft.Container(
+                                    ft.ListTile(
+                                        title=ft.Text("Дата окончания", size=14),
+                                        subtitle=ft.Text(end_date.strftime('%d.%m.%Y'), size=16, weight=ft.FontWeight.W_400)
+                                    )
+                                )
+                            ]
+                        ),
+                        padding=ft.padding.only(left=-15)
+                    ),
+                ]
+            else:
+                shift_info_col.controls = [
+                    ft.Text("Активная смена или поток отсутствует", size=16),
+                ]
+
+            shift_info_col.controls.append(
+                ft.FilledTonalButton(
+                    text="Изменить",
+                    icon=ft.icons.EDIT
+                )
+            )
+
+            shift_info = ft.Card(
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Row(
+                                [
+                                    ft.Icon(ft.icons.INFO),
+                                    ft.Text("Общая информация", size=20, weight=ft.FontWeight.W_400)
+                                ]
+                            ),
+                            shift_info_col
+                        ]
+                    ),
+                    padding=15
+                ),
+                width=600
+            )
+
             col = ft.Column(
                 controls=[
                     ft.Container(ft.Text(get_hello(admin['name'].split()[1]), size=25, weight=ft.FontWeight.W_600), padding=ft.padding.only(left=10)),
-                    systemd_card
+                    systemd_card,
+                    shift_info
                 ]
             )
 
@@ -739,7 +859,6 @@ def main(page: ft.Page):
                 systemd_btn.visible = False
 
             systemd_pb.visible = False
-            fback_pb.visible = False
             page.update()
 
         elif target == "edit_env":
@@ -788,23 +907,18 @@ def main(page: ft.Page):
             query = "SELECT * FROM crodconnect.modules WHERE status = 'active'"
             admins_list = make_db_request(query)
             if admins_list is not None:
-                col = ft.Column()
+                if type(admins_list) == dict: admins_list = [admins_list]
+                col = ft.ResponsiveRow(columns=3)
                 for admin in admins_list:
                     query = "SELECT * FROM crodconnect.teachers WHERE module_id = %s"
                     teacher_info = make_db_request(query, (admin['id'],))
-                    print(teacher_info)
                     if teacher_info is not None:
                         popup_items = [
                             ft.FilledButton(text='Изменить локацию', icon=ft.icons.LOCATION_ON, on_click=show_qr,
                                             data={'phrase': f"teachers_{teacher_info['pass_phrase']}", 'caption': teacher_info['name']}),
                             ft.FilledButton(text='QR-код', icon=ft.icons.QR_CODE, on_click=show_qr, data={'phrase': f"teachers_{teacher_info['pass_phrase']}", 'caption': teacher_info['name']}),
-                            ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=teacher_info['pass_phrase'], on_click=remove_admin),
+                            ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=teacher_info['pass_phrase'], on_click=goto_remove_module),
                         ]
-
-                        if teacher_info['telegram_id'] is None:
-                            activity_color = ft.colors.AMBER
-                        else:
-                            activity_color = ft.colors.GREEN
 
                         card = ft.Card(
                             ft.Container(
@@ -814,9 +928,13 @@ def main(page: ft.Page):
                                             [
                                                 ft.Container(
                                                     ft.ListTile(
-                                                        # title=ft.Text('Название', size=14),
                                                         title=ft.Text(admin['name'], size=16),
-                                                        leading=ft.Icon(ft.icons.ARTICLE)
+                                                        subtitle=ft.Text(teacher_info['name'], size=14),
+                                                        leading=ft.Icon(
+                                                            ft.icons.ARTICLE,
+                                                            color=user_statuses[teacher_info['status']]['color'],
+                                                            tooltip=user_statuses[teacher_info['status']]['naming']
+                                                        )
                                                     ),
                                                     expand=True
                                                 ),
@@ -825,43 +943,69 @@ def main(page: ft.Page):
                                                 )
                                             ]
                                         ),
-                                        ft.Container(ft.Divider(thickness=1), ),
-                                        ft.ListTile(
-                                            # title=ft.Text('Преподаватель', size=14),
-                                            title=ft.Text(teacher_info['name'], size=16),
-                                            leading=ft.Icon(ft.icons.PERSON)
-                                        ),
-                                        ft.Container(ft.Divider(thickness=1), ),
                                         ft.ListTile(
                                             # title=ft.Text('Локация', size=14),
                                             title=ft.Text(admin['location'], size=16),
+                                            subtitle=ft.Text(f"{admin['seats_real']} из {admin['seats_max']}", size=14),
                                             leading=ft.Icon(ft.icons.LOCATION_ON)
                                         ),
-                                        ft.Container(ft.Divider(thickness=1), ),
-                                        ft.ListTile(
-                                            # title=ft.Text('Заполненность', size=14),
-                                            title=ft.Text(f"{admin['seats_real']} из {admin['seats_max']}", size=16),
-                                            leading=ft.Icon()
-                                        )
                                     ],
                                     spacing=0.5
                                 ),
                                 padding=ft.padding.only(top=15, bottom=15)
                             ),
-                            width=600
+                            width=600,
+                            col={"lg": 1}
                         )
                         col.controls.append(card)
                 page.add(col)
                 dlg_loading.close()
 
-        elif target == "create_mentor":
-            new_mentor_name_field.value = None
-            new_mentor_group_dd.value = None
-            btn_add_mentor.disabled = True
+        elif target == "edit_child_group_num":
+            query = "SELECT * FROM crodconnect.children"
+            data = make_db_request(query)
+            if db.result['status'] == "ok":
+                if type(data) == dict: data = [data]
+                page.session.set('children_list', data)
+                col = ft.Column(
+                    controls=[
+                        ft.TextField(
+                            label="ФИО ребёнка",
+                            prefix_icon=ft.icons.CHILD_CARE,
+                            hint_text="Иванов Иван Иванович",
+                            on_change=find_child
+                        ),
+                        child_col
+                    ],
+                    width=600
+                )
+                page.add(col)
+
+        elif target == "add_child":
+            new_child.reset()
             col = ft.Column(
                 controls=[
-                    new_mentor_name_field,
-                    new_mentor_group_dd,
+                    new_child.name,
+                    new_child.birth,
+                    new_child.group,
+                    new_child.caption,
+                    ft.Divider(thickness=1),
+                    new_child.parent_name,
+                    new_child.phone,
+                    ft.Row([btn_add_child], alignment=ft.MainAxisAlignment.END)
+                ],
+                width=600,
+                alignment=ft.MainAxisAlignment.START,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER
+            )
+            page.add(col)
+
+        elif target == "create_mentor":
+            new_mentor.reset()
+            col = ft.Column(
+                controls=[
+                    new_mentor.name,
+                    new_mentor.group,
                     ft.Row([btn_add_mentor], alignment=ft.MainAxisAlignment.END)
                 ],
                 width=600,
@@ -871,10 +1015,10 @@ def main(page: ft.Page):
             page.add(ft.Container(col, expand=True))
 
         elif target == "create_admin":
-            new_admin_name_field.value = None
+            new_admin.reset()
             col = ft.Column(
                 controls=[
-                    new_admin_name_field,
+                    new_admin.name,
                     ft.Row([btn_add_admin], alignment=ft.MainAxisAlignment.END)
                 ],
                 width=600,
@@ -902,15 +1046,10 @@ def main(page: ft.Page):
                         ft.FilledButton(text='QR-код', icon=ft.icons.QR_CODE, on_click=show_qr, data={'phrase': f"mentors_{mentor['pass_phrase']}", 'caption': mentor['name']}),
                         ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=mentor['pass_phrase'], on_click=remove_mentor),
                     ]
-                    if mentor['telegram_id'] is None:
-                        activity_color = ft.colors.AMBER
-                    else:
-                        activity_color = ft.colors.GREEN
 
                     if mentor['status'] == 'active':
                         popup_items.insert(0, ft.FilledButton(text='Отключить', icon=ft.icons.BLOCK, on_click=change_active_status, data=f"mentors_{mentor['pass_phrase']}_frozen"), )
                     elif mentor['status'] == 'frozen':
-                        activity_color = ft.colors.GREY
                         popup_items.insert(0, ft.FilledButton(text='Активировать', icon=ft.icons.ADD, on_click=change_active_status, data=f"mentors_{mentor['pass_phrase']}_active"), )
 
                     col.controls.append(
@@ -922,7 +1061,11 @@ def main(page: ft.Page):
                                             ft.ListTile(
                                                 title=ft.Text(mentor['name']),
                                                 subtitle=ft.Text(f"Группа №{mentor['group_num']}"),
-                                                leading=ft.Icon(ft.icons.ACCOUNT_CIRCLE, color=activity_color)
+                                                leading=ft.Icon(
+                                                    ft.icons.ACCOUNT_CIRCLE,
+                                                    color=user_statuses[mentor['status']]['color'],
+                                                    tooltip=user_statuses[mentor['status']]['naming']
+                                                )
                                             ),
                                             expand=True
                                         ),
@@ -948,27 +1091,21 @@ def main(page: ft.Page):
             ]
             dlg_loading.loading_text = "Загрузка"
             dlg_loading.open()
-            query = "SELECT * FROM crodconnect.admins"
+            query = "SELECT * FROM crodconnect.admins WHERE status != 'creator'"
             admins_list = make_db_request(query)
             if type(admins_list) == dict: admins_list = [admins_list]
 
             if admins_list is not None:
                 col = ft.Column()
                 for admin in admins_list:
-                    print(admin, admins_list)
                     popup_items = [
                         ft.FilledButton(text='QR-код', icon=ft.icons.QR_CODE, on_click=show_qr, data={'phrase': f"admins_{admin['pass_phrase']}", 'caption': admin['name']}),
                         ft.FilledButton(text='Удалить', icon=ft.icons.DELETE, data=admin['pass_phrase'], on_click=remove_admin),
                     ]
-                    if admin['telegram_id'] is None:
-                        activity_color = ft.colors.AMBER
-                    else:
-                        activity_color = ft.colors.GREEN
 
                     if admin['status'] == 'active':
                         popup_items.insert(0, ft.FilledButton(text='Отключить', icon=ft.icons.BLOCK, on_click=change_active_status, data=f"admins_{admin['pass_phrase']}_frozen"))
                     elif admin['status'] == 'frozen':
-                        activity_color = ft.colors.GREY
                         popup_items.insert(0, ft.FilledButton(text='Активировать', icon=ft.icons.ADD, on_click=change_active_status, data=f"admins_{admin['pass_phrase']}_active"))
 
                     if admin['password'] == password_field.value:
@@ -981,7 +1118,11 @@ def main(page: ft.Page):
                                         ft.Container(
                                             ft.ListTile(
                                                 title=ft.Text(admin['name']),
-                                                leading=ft.Icon(ft.icons.ACCOUNT_CIRCLE, color=activity_color)
+                                                leading=ft.Icon(
+                                                    ft.icons.ACCOUNT_CIRCLE,
+                                                    color=user_statuses[admin['status']]['color'],
+                                                    tooltip=user_statuses[admin['status']]['naming']
+                                                )
                                             ),
                                             expand=True
                                         ),
@@ -1029,6 +1170,22 @@ def main(page: ft.Page):
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER
             )
             page.add(col)
+
+        elif target == "create_module":
+            new_module.reset()
+
+            col = ft.Column(
+                controls=[
+                    new_module.module_name,
+                    new_module.teacher_name,
+                    new_module.locations_dropdown,
+                    new_module.seats_count,
+                    ft.Row([btn_add_module], alignment=ft.MainAxisAlignment.END)
+                ],
+                width=600
+            )
+            page.add(col)
+
 
         elif target == "reboot_menu":
             page.appbar.actions = [
@@ -1185,16 +1342,13 @@ def main(page: ft.Page):
 
         page.update()
 
-    new_mentor_name_field = ft.TextField(
-        label="ФИО",
-        hint_text="Иванов Иван Иванович",
-        on_change=lambda _: validate('mentor')
+    btn_add_child = ft.ElevatedButton(
+        text="Добавить",
+        icon=ft.icons.SAVE,
+        disabled=True,
+        on_click=lambda _: print("OOKOK")
     )
-    new_mentor_group_dd = ft.Dropdown(
-        label="Номер группы",
-        options=[ft.dropdown.Option(key=str(a), text=str(a)) for a in range(1, 6)],
-        on_change=lambda _: validate('mentor')
-    )
+
     btn_add_mentor = ft.ElevatedButton(
         text="Добавить",
         icon=ft.icons.SAVE,
@@ -1202,11 +1356,6 @@ def main(page: ft.Page):
         on_click=lambda _: add_new_mentor()
     )
 
-    new_admin_name_field = ft.TextField(
-        label="ФИО",
-        hint_text="Иванов Иван Иванович",
-        on_change=lambda _: validate('admin')
-    )
     btn_add_admin = ft.ElevatedButton(
         text="Добавить",
         icon=ft.icons.SAVE,
@@ -1214,31 +1363,22 @@ def main(page: ft.Page):
         on_click=lambda _: add_new_admin()
     )
 
-    new_module_name_field = ft.TextField(
-        label="Название",
-        hint_text="Программирование на Python",
-        on_change=lambda _: validate('module')
-    )
-    new_module_location_dd = ft.Dropdown(
-        label="Локация",
-        options=[ft.dropdown.Option(key=loc, text=loc) for loc in locations],
-        on_change=lambda _: validate('module')
-    )
-    new_module_seats_field = ft.TextField(
-        label="Количество мест",
-        hint_text="15",
-        on_change=lambda _: validate('module')
-    )
-    new_module_teacher_name_field = ft.TextField(
-        label="ФИО преподавателя",
-        hint_text="Иванов Иван Иванович",
-        on_change=lambda _: validate('module')
-    )
     btn_add_module = ft.ElevatedButton(
         text="Добавить",
         icon=ft.icons.SAVE,
         disabled=True,
         on_click=lambda _: add_new_module()
+    )
+
+    new_module = NewModule(page=page, save_btn=btn_add_module)
+    new_admin = NewAdmin(page=page, save_btn=btn_add_admin)
+    new_mentor = NewMentor(page=page, save_btn=btn_add_mentor)
+    new_child = NewChild(page=page, save_btn=btn_add_child)
+
+    child_to_change_group = ft.TextField(
+        label="ФИО ребёнка",
+        prefix_icon=ft.icons.CHILD_CARE,
+        hint_text="Иванов Иван Иванович"
     )
 
     def change_active_status(e: ft.ControlEvent):
@@ -1311,6 +1451,9 @@ def main(page: ft.Page):
                 change_screen("modules_info")
                 dlg_loading.close()
 
+            elif action == "remove_module":
+                remove_module(page.session.get('remove_module_pass_phrase'))
+
             elif action == "remove_modules_records":
                 dlg_loading.loading_text = "Удаляем записи"
                 dlg_loading.open()
@@ -1353,6 +1496,9 @@ def main(page: ft.Page):
             },
             'remove_modules': {
                 'title': "Удаление модулей"
+            },
+            'remove_module': {
+                'title': "Удаление модуля"
             },
             'remove_modules_records': {
                 'title': "Удаление записей на модули"
@@ -1415,7 +1561,7 @@ def main(page: ft.Page):
             if not admin_info:
                 open_sb("Ошибка доступа", ft.colors.RED)
             else:
-                if admin_info['status'] == 'active':
+                if admin_info['status'] in ['active', 'creator']:
                     password_field.data = admin_info
                     change_screen("main")
 
@@ -1647,6 +1793,7 @@ def main(page: ft.Page):
 
         users_list = make_db_request(query, params)
         if users_list is not None:
+            if type(users_list) == dict: users_list = [users_list]
             if users_list:
                 page.controls.clear()
                 qr_screen_col = ft.Column(width=600, scroll=ft.ScrollMode.HIDDEN)
@@ -1665,7 +1812,7 @@ def main(page: ft.Page):
                         )
                     )
 
-                back_btn = ft.IconButton(ft.icons.ARROW_BACK_IOS_NEW, visible=admin, on_click=lambda _: change_screen('select_qr_group'))
+                back_btn = ft.IconButton(ft.icons.ARROW_BACK, visible=admin, on_click=lambda _: change_screen('select_qr_group'))
                 qr_screen_col.controls = [
                     ft.Card(
                         ft.Container(
@@ -1852,12 +1999,14 @@ def main(page: ft.Page):
         ],
     )
 
+    page.route = "/"
     if is_debug():
+        print('ok5')
         page.window_width = 377
         page.window_height = 768
-        # page.route = "/"
+
         # page.route = "/modulecheck?mentor_id=26&module_id=1&initiator=409801981&signature=2f686ce6a26f9d7da3b8640d41e263de509a480d5712d8a6783996c7e9317f45"
-        page.route = "/showqr/mentor?target=children&value=3&initiator=409801981&signature=654962104fc3627e1bae115b3bb54255cd9338021de9d03cb7c5db5c858bf055"
+        # page.route = "/showqr/mentor?target=children&value=3&initiator=409801981&signature=654962104fc3627e1bae115b3bb54255cd9338021de9d03cb7c5db5c858bf055"
         # page.route = "/showqr/admin?initiator=409801981"
 
     # Точка входа
@@ -1869,6 +2018,7 @@ def main(page: ft.Page):
     if all([fl[1]['status'] for fl in startup.items()]):
         if not url_path[0]:
             if is_debug():
+                print('ok6')
                 password_field.value = "lrrrtm"
                 change_screen("login")
                 login()
@@ -1915,6 +2065,7 @@ if __name__ == "__main__":
     if platform.system() == "Windows":
         os.environ['DEBUG'] = "0"
     if is_debug():
+        print('ok1')
         ft.app(
             target=main,
             assets_dir='assets',
@@ -1922,10 +2073,11 @@ if __name__ == "__main__":
             # view=ft.AppView.WEB_BROWSER,
             # port=8001
         )
+        print('ok1')
     else:
         ft.app(
             target=main,
             assets_dir='assets',
             upload_dir='assets/uploads',
-            port=8001
+            # port=8001
         )

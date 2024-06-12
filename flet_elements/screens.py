@@ -51,7 +51,7 @@ screens = {
             },
             'title': "Добавление ребёнка"
         },
-        'scroll_mode': base_scroll_mode
+        'scroll_mode': None
     },
     'modules_info': {
         'appbar': {

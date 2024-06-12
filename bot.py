@@ -57,6 +57,7 @@ redis = RedisTable(
 redis.connect()
 
 statuses = {
+    'can_respond': True,
     'feedback': True,
     'modules_record': False,
     'radio': False
@@ -153,7 +154,7 @@ async def get_module_list(callback: types.CallbackQuery):
     query = "SELECT * FROM crodconnect.modules WHERE status = 'active'"
 
     modules = make_db_request(query)
-
+    if type(modules) == dict: modules = [modules]
     if len(modules) > 0:
         await callback.message.delete()
         btns_builder = keyboard.InlineKeyboardBuilder()
@@ -233,7 +234,7 @@ async def send_hello(telegram_id: int, table: str):
         await bot.send_message(
             chat_id=telegram_id,
             text=lexicon['hello_messages']['admins'].format(
-                user_info['name'], markdown.markdown_decoration.spoiler(user_info['password'])
+                user_info['name'], markdown.html_decoration.spoiler(user_info['password'])
             ),
             reply_markup=kb_hello[table].as_markup()
         )
@@ -288,7 +289,7 @@ async def deep_linking(message: Message, command: CommandObject):
     if target in ['children', 'mentors', 'teachers', 'admins']:
         if await get_user_status('telegram_id', telegram_id) == 'alien':
             if await is_pass_phrase_ok(target, pass_phrase):
-                query = f"UPDATE {target} SET telegram_id = %s WHERE pass_phrase = %s"
+                query = f"UPDATE {target} SET telegram_id = %s, status = 'active' WHERE pass_phrase = %s"
 
                 make_db_request(query, (telegram_id, pass_phrase,))
 
@@ -329,47 +330,47 @@ async def deep_linking(message: Message, command: CommandObject):
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    telegram_id = message.chat.id
-    message_text = {
-        'children': "<b>Ты в главном меню, выбери, что хочешь сделать</b>",
-        'mentors': "<b>Выберите требуемое действие</b>",
-        'teachers': "<b>Выберите требуемое действие</b>",
-        'admins': "<b>Выберите требуемое действие</b>",
-        'frozen': "У вас временно <b>отсутствует доступ к боту.</b> Если вы считатете, что произошла ошибка, обратитесь к администрации",
-        'alien': "Чтобы начать пользоваться ботом, тебе нужно <b>отсканировать свой личный QR-код.</b> "
-                 "Если возникают трудности, обратись к воспитателям или администрации"
+    if statuses['can_respond']:
+        telegram_id = message.chat.id
+        message_text = {
+            'children': "<b>Ты в главном меню, выбери, что хочешь сделать</b>",
+            'mentors': "<b>Выберите требуемое действие</b>",
+            'teachers': "<b>Выберите требуемое действие</b>",
+            'admins': "<b>Выберите требуемое действие</b>",
+            'frozen': "У вас временно <b>отсутствует доступ к боту.</b> Если вы считатете, что произошла ошибка, обратитесь к администрации",
+            'alien': "Чтобы начать пользоваться ботом, тебе нужно <b>отсканировать свой личный QR-код.</b> "
+                     "Если возникают трудности, обратись к воспитателям или администрации"
 
-    }
-    if str(telegram_id)[0] != '-':
-        user_status = await get_user_status('telegram_id', telegram_id)
-        user_group = user_status
+        }
+        if str(telegram_id)[0] != '-':
+            user_status = await get_user_status('telegram_id', telegram_id)
+            user_group = user_status
 
-        if user_status in ['alien', 'frozen']:
-            rm = None
-        else:
-            user_group = await get_user_group(telegram_id)
-            rm = kb_main[user_group].as_markup()
-
-
-        await bot.send_message(
-            chat_id=telegram_id,
-            text=message_text[user_group],
-            reply_markup=rm
-        )
-    else:
-        if telegram_id == int(os.getenv('ID_GROUP_RADIO')):
-            radio_builder = keyboard.InlineKeyboardBuilder()
-            if not statuses['radio']:
-                text = "Чтобы включить радио, нажмите на кнопку ниже, дети получат сообщение и смогу отправлять заявки"
-                radio_builder.button(text="🟢 Включить радио", callback_data="radio_on")
+            if user_status in ['alien', 'frozen']:
+                rm = None
             else:
-                text = "Чтобы выключить радио, нажмите на кнопку ниже, дети не смогут отправлять заявки"
-                radio_builder.button(text="🔴 Выключить радио", callback_data="radio_off")
-            await message.answer(
-                text="<b>Управление радио</b>"
-                     f"\n\n{text}",
-                reply_markup=radio_builder.as_markup()
+                user_group = await get_user_group(telegram_id)
+                rm = kb_main[user_group].as_markup()
+
+            await bot.send_message(
+                chat_id=telegram_id,
+                text=message_text[user_group],
+                reply_markup=rm
             )
+        else:
+            if telegram_id == int(os.getenv('ID_GROUP_RADIO')):
+                radio_builder = keyboard.InlineKeyboardBuilder()
+                if not statuses['radio']:
+                    text = "Чтобы включить радио, нажмите на кнопку ниже, дети получат сообщение и смогу отправлять заявки"
+                    radio_builder.button(text="🟢 Включить радио", callback_data="radio_on")
+                else:
+                    text = "Чтобы выключить радио, нажмите на кнопку ниже, дети не смогут отправлять заявки"
+                    radio_builder.button(text="🔴 Выключить радио", callback_data="radio_off")
+                await message.answer(
+                    text="<b>Управление радио</b>"
+                         f"\n\n{text}",
+                    reply_markup=radio_builder.as_markup()
+                )
 
 
 @dp.message(Command("radio"))
@@ -426,117 +427,117 @@ async def send_random_value(callback: types.CallbackQuery):
 
 @dp.callback_query(MentorsCallbackFactory.filter())
 async def callbacks_mentors(callback: types.CallbackQuery, callback_data: MentorsCallbackFactory):
-    action = callback_data.action
-    user_status = await get_user_status('telegram_id', callback.from_user.id)
-    if user_status == 'active':
-        user_info = await get_user_info(callback.from_user.id, 'mentors')
+    if statuses['can_respond']:
+        action = callback_data.action
+        user_status = await get_user_status('telegram_id', callback.from_user.id)
+        if user_status == 'active':
+            user_info = await get_user_info(callback.from_user.id, 'mentors')
 
-        if action == "grouplist":
-            await callback.message.delete()
-            query = "SELECT * FROM crodconnect.children where group_num = %s and status = 'active'"
-
-            group_list = make_db_request(query, (user_info['group_num'],))
-
-            msg = await callback.message.answer(
-                text="<b>Список группы создаётся...</b>"
-            )
-            group_list_filename = get_grouplist(group_list, user_info['group_num'])
-            filepath = f"{current_directory}/wording/generated/{group_list_filename}.pdf"
-
-            await msg.delete()
-            document = types.FSInputFile(filepath)
-            await bot.send_document(
-                chat_id=callback.from_user.id,
-                document=document,
-                caption=f"Список группы №{user_info['group_num']}",
-                reply_markup=kb_hello['mentors'].as_markup()
-            )
-            if os.path.exists(filepath):
-                os.remove(filepath)
-
-        elif action == "feedback":
-            query = "SELECT COUNT(*) AS count FROM crodconnect.feedback WHERE child_id IN (SELECT id from crodconnect.children WHERE group_num = %s) AND date = %s"
-
-            fb_count = make_db_request(query, (user_info['group_num'], datetime.datetime.now().date(),))['count']
-            query = "SELECT COUNT(*) AS count from crodconnect.children WHERE group_num = %s"
-            group_count = make_db_request(query, (user_info['group_num'],))['count']
-
-            current_date = datetime.datetime.now().date().strftime('%d.%m.%Y')
-
-            await callback.answer(
-                text=lexicon['callback_alerts']['mentor_fback_stat'].format(
-                    current_date, fb_count, group_count
-                ),
-                show_alert=True
-            )
-
-        elif action == "births":
-            query = "SELECT c.* FROM crodconnect.children c JOIN crodconnect.shift_info s ON c.birth < s.end_date AND c.birth >= s.start_date AND c.group_num = %s"
-
-            birth_list = make_db_request(query, (user_info['group_num'],))
-
-            birth_list.sort(key=lambda el: el['birth'])
-            if len(birth_list) > 0:
+            if action == "grouplist":
                 await callback.message.delete()
-                text = f"<b>Список именинников</b>\n\n"
-                for child in birth_list:
-                    text += f"{child['name']} ({child['birth'].day} {months[child['birth'].month]})\n"
-                await callback.message.answer(
-                    text=text,
+                query = "SELECT * FROM crodconnect.children where group_num = %s and status = 'active'"
+
+                group_list = make_db_request(query, (user_info['group_num'],))
+
+                msg = await callback.message.answer(
+                    text="<b>Список группы создаётся...</b>"
+                )
+                group_list_filename = get_grouplist(group_list, user_info['group_num'])
+                filepath = f"{current_directory}/wording/generated/{group_list_filename}.pdf"
+
+                await msg.delete()
+                document = types.FSInputFile(filepath)
+                await bot.send_document(
+                    chat_id=callback.from_user.id,
+                    document=document,
+                    caption=f"Список группы №{user_info['group_num']}",
                     reply_markup=kb_hello['mentors'].as_markup()
                 )
-            else:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+
+            elif action == "feedback":
+                query = "SELECT COUNT(*) AS count FROM crodconnect.feedback WHERE child_id IN (SELECT id from crodconnect.children WHERE group_num = %s) AND date = %s"
+
+                fb_count = make_db_request(query, (user_info['group_num'], datetime.datetime.now().date(),))['count']
+                query = "SELECT COUNT(*) AS count from crodconnect.children WHERE group_num = %s"
+                group_count = make_db_request(query, (user_info['group_num'],))['count']
+
+                current_date = datetime.datetime.now().date().strftime('%d.%m.%Y')
+
                 await callback.answer(
-                    text=lexicon['callback_alerts']['no_births_group'],
+                    text=lexicon['callback_alerts']['mentor_fback_stat'].format(
+                        current_date, fb_count, group_count
+                    ),
                     show_alert=True
                 )
 
-        elif action == "modules_list":
-            await get_module_list(callback)
+            elif action == "births":
+                query = "SELECT c.* FROM crodconnect.children c JOIN crodconnect.shift_info s ON c.birth < s.end_date AND c.birth >= s.start_date AND c.group_num = %s"
 
-        elif action == "qrc":
-            await callback.message.delete()
-            target = 'children'
-            url = f"{base_crod_url}/connect/showqr/mentor?target={target}&value={user_info['group_num']}&initiator={callback.from_user.id}"
+                birth_list = make_db_request(query, (user_info['group_num'],))
 
-            signature, signed_url = create_signed_url(url, SECRET_KEY)
-            set_redis_hash(signature, f"showqr_{callback.from_user.id}_{target}_{user_info['group_num']}")
+                birth_list.sort(key=lambda el: el['birth'])
+                if len(birth_list) > 0:
+                    await callback.message.delete()
+                    text = f"<b>Список именинников</b>\n\n"
+                    for child in birth_list:
+                        text += f"{child['name']} ({child['birth'].day} {months[child['birth'].month]})\n"
+                    await callback.message.answer(
+                        text=text,
+                        reply_markup=kb_hello['mentors'].as_markup()
+                    )
+                else:
+                    await callback.answer(
+                        text=lexicon['callback_alerts']['no_births_group'],
+                        show_alert=True
+                    )
 
-            btn = keyboard.InlineKeyboardBuilder().button(
-                text="QR-коды #️⃣",
-                web_app=types.WebAppInfo(
-                    url=signed_url
+            elif action == "modules_list":
+                await get_module_list(callback)
+
+            elif action == "qrc":
+                await callback.message.delete()
+                target = 'children'
+                url = f"{base_crod_url}/connect/showqr/mentor?target={target}&value={user_info['group_num']}&initiator={callback.from_user.id}"
+
+                signature, signed_url = create_signed_url(url, SECRET_KEY)
+                set_redis_hash(signature, f"showqr_{callback.from_user.id}_{target}_{user_info['group_num']}")
+
+                btn = keyboard.InlineKeyboardBuilder().button(
+                    text="QR-коды #️⃣",
+                    web_app=types.WebAppInfo(
+                        url=signed_url
+                    )
                 )
-            )
-            await callback.message.answer(
-                text="Нажмите на кнопку, чтобы открыть список QR-кодов вашей группы",
-                reply_markup=btn.as_markup()
-            )
-        elif action == "traffic":
-            await callback.message.delete()
-            module_id = 1
-            url = f"{base_crod_url}/connect/modulecheck?mentor_id={user_info['id']}&module_id={module_id}&initiator={callback.from_user.id}"
-
-            signature, signed_url = create_signed_url(url, SECRET_KEY)
-            set_redis_hash(signature, f"modulecheck_{callback.from_user.id}_{user_info['id']}_{module_id}")
-
-            btn = keyboard.InlineKeyboardBuilder().button(
-                text="Посещаемость",
-                web_app=types.WebAppInfo(
-                    url=signed_url
+                await callback.message.answer(
+                    text="Нажмите на кнопку, чтобы открыть список QR-кодов вашей группы",
+                    reply_markup=btn.as_markup()
                 )
-            )
-            await callback.message.answer(
-                text="Нажмите на кнопку, чтобы отметить посещаемость",
-                reply_markup=btn.as_markup()
-            )
+            elif action == "traffic":
+                await callback.message.delete()
+                module_id = 1
+                url = f"{base_crod_url}/connect/modulecheck?mentor_id={user_info['id']}&module_id={module_id}&initiator={callback.from_user.id}"
 
-    else:
-        await callback.answer(
-            text=lexicon['callback_alerts']['mentor_access_denied'],
-            show_alert=True
-        )
+                signature, signed_url = create_signed_url(url, SECRET_KEY)
+                set_redis_hash(signature, f"modulecheck_{callback.from_user.id}_{user_info['id']}_{module_id}")
 
+                btn = keyboard.InlineKeyboardBuilder().button(
+                    text="Посещаемость",
+                    web_app=types.WebAppInfo(
+                        url=signed_url
+                    )
+                )
+                await callback.message.answer(
+                    text="Нажмите на кнопку, чтобы отметить посещаемость",
+                    reply_markup=btn.as_markup()
+                )
+
+        else:
+            await callback.answer(
+                text=lexicon['callback_alerts']['mentor_access_denied'],
+                show_alert=True
+            )
 
 
 @dp.callback_query(F.data == "check_apply")
@@ -585,56 +586,57 @@ async def callnacks_select_module(callback: types.CallbackQuery, callback_data: 
 
 @dp.callback_query(TeachersCallbackFactory.filter())
 async def callbacks_teachers(callback: types.CallbackQuery, callback_data: TeachersCallbackFactory):
-    action = callback_data.action
-    user_status = await get_user_status('telegram_id', callback.from_user.id)
+    if statuses['can_respond']:
+        action = callback_data.action
+        user_status = await get_user_status('telegram_id', callback.from_user.id)
 
-    if user_status == 'active':
-        user_info = await get_user_info(callback.from_user.id, 'teachers')
-        query = "SELECT * FROM crodconnect.modules WHERE id = %s"
+        if user_status == 'active':
+            user_info = await get_user_info(callback.from_user.id, 'teachers')
+            query = "SELECT * FROM crodconnect.modules WHERE id = %s"
 
-        module_info = make_db_request(query, (user_info['module_id'],))
+            module_info = make_db_request(query, (user_info['module_id'],))
 
-        if action == "grouplist":
-            group_list = await get_module_children_list(user_info['module_id'])
-            if len(group_list) > 0:
-                await callback.message.delete()
+            if action == "grouplist":
+                group_list = await get_module_children_list(user_info['module_id'])
+                if len(group_list) > 0:
+                    await callback.message.delete()
 
-                text = f"<b>Список группы по модулю «{module_info['name']}»</b>\n\n"
+                    text = f"<b>Модуль «{module_info['name']}»</b>\n\n"
 
-                for index, part in enumerate(group_list):
-                    text += f"{index + 1}. {part['name']} ({part['group_num']})\n"
-                await callback.message.answer(
-                    text=text,
-                    reply_markup=kb_hello['teachers'].as_markup()
-                )
-            else:
-                await callback.answer(
-                    text=lexicon['callback_alerts']['no_parts_in_module'],
-                    show_alert=True
-                )
-        elif action == "feedback":
-            feedback_list = await get_module_feedback_today(user_info['module_id'])
-            if len(feedback_list) > 0:
-                await callback.message.delete()
-                current_date = datetime.datetime.now().date().strftime('%d.%m.%Y')
-                text = f"<b>Обратная связь по модулю «{module_info['name']}» за {current_date}</b>\n\n"
-                for fb in feedback_list:
-                    text += f"Оценка: {fb['mark']}\nКомментарий: {fb['comment']}\n\n"
-                await callback.message.answer(
-                    text=text,
-                    reply_markup=kb_hello['teachers'].as_markup()
-                )
+                    for index, part in enumerate(group_list):
+                        text += f"{index + 1}. {part['name']} ({part['group_num']})\n"
+                    await callback.message.answer(
+                        text=text,
+                        reply_markup=kb_hello['teachers'].as_markup()
+                    )
+                else:
+                    await callback.answer(
+                        text=lexicon['callback_alerts']['no_parts_in_module'],
+                        show_alert=True
+                    )
+            elif action == "feedback":
+                feedback_list = await get_module_feedback_today(user_info['module_id'])
+                if len(feedback_list) > 0:
+                    await callback.message.delete()
+                    current_date = datetime.datetime.now().date().strftime('%d.%m.%Y')
+                    text = f"<b>Обратная связь по модулю «{module_info['name']}» за {current_date}</b>\n\n"
+                    for fb in feedback_list:
+                        text += f"Оценка: {fb['mark']}\nКомментарий: {fb['comment']}\n\n"
+                    await callback.message.answer(
+                        text=text,
+                        reply_markup=kb_hello['teachers'].as_markup()
+                    )
 
-            else:
-                await callback.answer(
-                    text=lexicon['callback_alerts']['no_fback_teacher'],
-                    show_alert=True
-                )
-    else:
-        await callback.answer(
-            text=lexicon['callback_alerts']['teacher_access_denied'],
-            show_alert=True
-        )
+                else:
+                    await callback.answer(
+                        text=lexicon['callback_alerts']['no_fback_teacher'],
+                        show_alert=True
+                    )
+        else:
+            await callback.answer(
+                text=lexicon['callback_alerts']['teacher_access_denied'],
+                show_alert=True
+            )
 
 
 @dp.message(Radio.request_text)
@@ -706,32 +708,33 @@ async def callbacks_radio(callback: types.CallbackQuery, callback_data: RadioReq
 
 @dp.callback_query(AdminsCallbackFactory.filter())
 async def callbacks_admins(callback: types.CallbackQuery, callback_data: AdminsCallbackFactory, state: FSMContext):
-    action = callback_data.action
-    user_status = await get_user_status('telegram_id', callback.from_user.id)
+    if statuses['can_respond']:
+        action = callback_data.action
+        user_status = await get_user_status('telegram_id', callback.from_user.id)
 
-    if user_status == 'active':
-        print(action)
-        if action == "modules_list":
-            await get_module_list(callback)
+        if user_status == 'active':
+            print(action)
+            if action == "modules_list":
+                await get_module_list(callback)
 
-        elif action == "qr_list":
-            await callback.message.delete()
-            btn = keyboard.InlineKeyboardBuilder().button(
-                text="QR-коды #️⃣",
-                web_app=types.WebAppInfo(
-                    url=f"{base_crod_url}/connect/showqr/admin?initiator={callback.from_user.id}"
+            elif action == "qr_list":
+                await callback.message.delete()
+                btn = keyboard.InlineKeyboardBuilder().button(
+                    text="QR-коды #️⃣",
+                    web_app=types.WebAppInfo(
+                        url=f"{base_crod_url}/connect/showqr/admin?initiator={callback.from_user.id}"
+                    )
                 )
-            )
-            await callback.message.answer(
-                text="Нажмите на кнопку, чтобы посмотреть QR-коды",
-                reply_markup=btn.as_markup()
-            )
+                await callback.message.answer(
+                    text="Нажмите на кнопку, чтобы посмотреть QR-коды",
+                    reply_markup=btn.as_markup()
+                )
 
-    else:
-        await callback.answer(
-            text=lexicon['callback_alerts']['access_denied'],
-            show_alert=True
-        )
+        else:
+            await callback.answer(
+                text=lexicon['callback_alerts']['access_denied'],
+                show_alert=True
+            )
 
 
 async def send_recorded_modules_info(child_id: int, callback: types.CallbackQuery):
@@ -848,110 +851,138 @@ async def create_feedback_proccess(user_info: [], callback: types.CallbackQuery,
 
 @dp.callback_query(ChildrenCallbackFactory.filter())
 async def callbacks_children(callback: types.CallbackQuery, callback_data: ChildrenCallbackFactory, state: FSMContext):
-    action = callback_data.action
-    user_status = await get_user_status('telegram_id', callback.from_user.id)
+    if statuses['can_respond']:
+        action = callback_data.action
+        user_status = await get_user_status('telegram_id', callback.from_user.id)
 
-    if user_status == 'active':
-        user_info = await get_user_info(callback.from_user.id, 'children')
-        if action == "modules":
-            await recording_to_module_process(user_info['id'], callback)
+        if user_status == 'active':
+            user_info = await get_user_info(callback.from_user.id, 'children')
+            if action == "modules":
+                await recording_to_module_process(user_info['id'], callback)
 
-        elif action == "feedback":
-            if statuses['feedback']:
-                if not await create_feedback_proccess(user_info, callback):
-                    await callback.answer(
-                        text="Ты уже отправил(-а) обратную связь по сегодняшим модулям, спасибо!",
-                        show_alert=True
-                    )
-                else:
-                    await callback.answer()
-            else:
-                await callback.answer(
-                    text=lexicon['callback_alerts']['no_fback_child'],
-                    show_alert=True
-                )
-
-        elif action == "radio":
-            if statuses['radio']:
-                if user_info['telegram_id'] not in radio_request_user_list:
-                    await callback.message.delete()
-                    await state.set_state(Radio.request_text)
-                    await callback.message.answer(
-                        text="<b>Радио ждёт именно тебя!</b>"
-                             "\n\nОтправь название песни, чтобы мы включили её на нашем радио " \
-                             "или напиши пожелание, которое мы озвучим в прямом эфире! (не забудь указать, кому адресовано пожелание)" \
-                             "\n\nЧтобы вернуться назад, отправь /start" \
-                             "\n\n_Все заявки проходят проверку на цензуру, поэтому не все песни могут прозвучать в эфире_"
-                    )
-
+            elif action == "feedback":
+                if statuses['feedback']:
+                    if not await create_feedback_proccess(user_info, callback):
+                        await callback.answer(
+                            text="Ты уже отправил(-а) обратную связь по сегодняшим модулям, спасибо!",
+                            show_alert=True
+                        )
+                    else:
+                        await callback.answer()
                 else:
                     await callback.answer(
-                        text=lexicon['callback_alerts']['radio_request_already'],
+                        text=lexicon['callback_alerts']['no_fback_child'],
                         show_alert=True
                     )
 
-            else:
-                await callback.answer(
-                    text=lexicon['callback_alerts']['no_radio'],
-                    show_alert=True
-                )
+            elif action == "radio":
+                if statuses['radio']:
+                    if user_info['telegram_id'] not in radio_request_user_list:
+                        await callback.message.delete()
+                        await state.set_state(Radio.request_text)
+                        await callback.message.answer(
+                            text="<b>Радио ждёт именно тебя!</b>"
+                                 "\n\nОтправь название песни, чтобы мы включили её на нашем радио " \
+                                 "или напиши пожелание, которое мы озвучим в прямом эфире! (не забудь указать, кому адресовано пожелание)" \
+                                 "\n\nЧтобы вернуться назад, отправь /start" \
+                                 "\n\n_Все заявки проходят проверку на цензуру, поэтому не все песни могут прозвучать в эфире_"
+                        )
 
-    else:
-        await callback.answer(
-            text=lexicon['callback_alerts']['child_access_denied'],
-            show_alert=True
-        )
+                    else:
+                        await callback.answer(
+                            text=lexicon['callback_alerts']['radio_request_already'],
+                            show_alert=True
+                        )
+
+                else:
+                    await callback.answer(
+                        text=lexicon['callback_alerts']['no_radio'],
+                        show_alert=True
+                    )
+
+        else:
+            await callback.answer(
+                text=lexicon['callback_alerts']['child_access_denied'],
+                show_alert=True
+            )
 
 
 async def start_feedback():
-    statuses['feedback'] = True
-    query = "SELECT * FROM crodconnect.children WHERE status = %s"
+    if statuses['can_respond']:
+        statuses['feedback'] = True
+        query = "SELECT * FROM crodconnect.children WHERE status = 'active'"
 
-    children_list = make_db_request(query, ('active',))
-    for child in children_list:
-        if child['telegram_id']:
-            await bot.send_message(
-                chat_id=child['telegram_id'],
-                text="Сбор обратной связи открыт!",
-                reply_markup=kb_hello['children'].as_markup()
-            )
+        children_list = make_db_request(query)
+        for child in children_list:
+            if child['telegram_id']:
+                await bot.send_message(
+                    chat_id=child['telegram_id'],
+                    text="Сбор обратной связи открыт!",
+                    reply_markup=kb_hello['children'].as_markup()
+                )
+
+
+async def check_for_date():
+    logging.info("Check for shift end")
+    dates = load_config_file('config.json')['shift']['date']
+    if not (datetime.datetime.strptime(dates['start'], '%Y-%m-%d') <= datetime.datetime.now() <= datetime.datetime.strptime(dates['end'], '%Y-%m-%d')):
+        logging.info("Shift ended, responding to actions stopped")
+        statuses['can_respond'] = False
+        btn = keyboard.InlineKeyboardBuilder().button(
+            text="Открыть Коннект",
+            url=f"{base_crod_url}/connect"
+        )
+        text = "⛔ Бот отключен для детей, воспитателей и преподавателей. Чтобы открыть доступ к боту, добавьте дату начала и окончания следующей смены в Коннект"
+        kb = btn.as_markup()
+
+    else:
+        logging.info("Shift not ended, running responding to actions")
+        text = "✅ Бот доступен для всех групп пользователей"
+        kb = None
+
+    await bot.send_message(
+        chat_id=os.getenv('ID_GROUP_ERRORS'),
+        text="<b>Состояние бота</b>\n\n" + text,
+        reply_markup=kb
+    )
 
 
 async def stop_feedback():
-    statuses['feedback'] = False
-    query = "SELECT * FROM crodconnect.teachers WHERE status = 'active'"
+    if statuses['can_respond']:
+        statuses['feedback'] = False
+        query = "SELECT * FROM crodconnect.teachers WHERE status = 'active'"
 
-    teachers_list = make_db_request(query)
-    for teacher in teachers_list:
-        query = "SELECT * FROM crodconnect.feedback WHERE date = %s AND module_id = %s"
-        feedback_list = make_db_request(query, (datetime.datetime.now().date(), teacher['module_id']))
-        if len(feedback_list) > 0:
-            query = "SELECT name FROM crodconnect.modules WHERE id = %s"
-            module_name = make_db_request(query, (teacher['module_id'],))['name']
-            filename = get_feedback(module_name, feedback_list)
-            filepath = f"{current_directory}/wording/generated/{filename}.pdf"
-            document = types.FSInputFile(filepath)
-            date = datetime.datetime.now().date().strftime('%d.%m.%Y')
-            await bot.send_document(
-                chat_id=teacher['telegram_id'],
-                document=document,
-                caption=f"<b>Рассылка обратной связи</b>"
-                        f"\n\nОбратная связь по вашему модулю за {date}",
-                reply_markup=kb_hello['mentors'].as_markup()
-            )
-            # print(os.listdir('wording/generated'))
-            if os.path.exists(filepath):
-                os.remove(filepath)
-        else:
-            await bot.send_message(
-                chat_id=teacher['telegram_id'],
-                text=f"<b>Рассылка обратной связи</b>"
-                     f"\n\n{' '.join(teacher['name'].split()[1:])}, за сегодняшний день по вашему образовательному модулю не было получено обратной связи",
-                reply_markup=kb_hello['teachers'].as_markup()
-            )
+        teachers_list = make_db_request(query)
+        for teacher in teachers_list:
+            query = "SELECT * FROM crodconnect.feedback WHERE date = %s AND module_id = %s"
+            feedback_list = make_db_request(query, (datetime.datetime.now().date(), teacher['module_id']))
+            if len(feedback_list) > 0:
+                query = "SELECT name FROM crodconnect.modules WHERE id = %s"
+                module_name = make_db_request(query, (teacher['module_id'],))['name']
+                filename = get_feedback(module_name, feedback_list)
+                filepath = f"{current_directory}/wording/generated/{filename}.pdf"
+                document = types.FSInputFile(filepath)
+                date = datetime.datetime.now().date().strftime('%d.%m.%Y')
+                await bot.send_document(
+                    chat_id=teacher['telegram_id'],
+                    document=document,
+                    caption=f"<b>Рассылка обратной связи</b>"
+                            f"\n\nОбратная связь по вашему модулю за {date}",
+                    reply_markup=kb_hello['mentors'].as_markup()
+                )
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            else:
+                await bot.send_message(
+                    chat_id=teacher['telegram_id'],
+                    text=f"<b>Рассылка обратной связи</b>"
+                         f"\n\n{' '.join(teacher['name'].split()[1:])}, за сегодняшний день по вашему образовательному модулю не было получено обратной связи",
+                    reply_markup=kb_hello['teachers'].as_markup()
+                )
 
 
 async def main():
+    await check_for_date()
     scheduler = AsyncIOScheduler()
     schedule = config['auto_actions']
     scheduler.add_job(
@@ -967,6 +998,14 @@ async def main():
         day_of_week=schedule['stop_feedback']['working_period'],
         hour=schedule['stop_feedback']['hour'],
         minute=schedule['stop_feedback']['minute'])
+    scheduler.add_job(
+        check_for_date,
+        "cron",
+        day_of_week="mon-sun",
+        hour=0,
+        minute=0
+    )
+    scheduler.print_jobs()
     scheduler.start()
     if platform.system() != "Windows":
         await bot.send_message(
@@ -974,6 +1013,7 @@ async def main():
             text="<b>Перезагрузка сервисов</b>"
                  "\n\nТелеграмм-бот перезагружен!"
         )
+
     await bot(DeleteWebhook(drop_pending_updates=True))
     await dp.start_polling(bot)
 

@@ -63,10 +63,16 @@ kb_hello = {
     ),
     'admins': keyboard.InlineKeyboardBuilder(
         markup=[
-            [keyboard.InlineKeyboardButton(
-                text="Главное меню 🧑‍💻",
-                callback_data="firststart"
-            )]
+            [
+                keyboard.InlineKeyboardButton(
+                    text="Главное меню 🧑‍💻",
+                    callback_data="firststart"
+                ),
+                keyboard.InlineKeyboardButton(
+                    text="Открыть Коннект",
+                    url=f"{base_crod_url}/connect"
+                )
+            ]
         ]
     ),
 }
@@ -77,5 +83,3 @@ kb_main = {
     'teachers': builder_teachers,
     'admins': builder_admins
 }
-
-

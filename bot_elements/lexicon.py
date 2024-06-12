@@ -29,7 +29,6 @@ lexicon = {
                   "\n\n<b>Ваши данные</b>"
                   "\n{0}"
                   "\nПароль для Connect: {1}"
-                  f"\n{markdown.link('Открыть Connect', f'{base_crod_url}/connect')}",
     },
     'callback_alerts': {
         'mentor_access_denied': "⛔ Действие недоступно, так как на данный момент вы не являетесь воспитателем",
