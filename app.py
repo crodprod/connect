@@ -665,8 +665,7 @@ def main(page: ft.Page):
                             if os.path.exists(pdf):
                                 os.remove(pdf)
             elif doctype == "navigation":
-                query = "SELECT name from crodconnect.shift_info where id = 0"
-                shift_name = make_db_request(query)
+                shift_name = load_config_file('config.json')['shift']['name']
 
                 query = "SELECT * FROM crodconnect.modules WHERE status = 'active'"
                 modules = make_db_request(query)
