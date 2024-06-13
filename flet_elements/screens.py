@@ -145,7 +145,7 @@ screens = {
                 'action': "drawer",
                 'target': None
             },
-            'title': "Состояние системы"
+            'title': "Система"
         },
         'scroll_mode': base_scroll_mode
     },

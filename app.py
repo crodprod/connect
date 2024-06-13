@@ -5,6 +5,7 @@ import os
 import platform
 import random
 import re
+import subprocess
 import time
 
 import flet as ft
@@ -29,6 +30,7 @@ from flet_elements.systemd import reboot_systemd, check_systemd
 from flet_elements.telegram import send_telegam_message, send_telegram_document, delete_telegram_message
 from flet_elements.functions import is_debug
 from flet_elements.user_statuses import user_statuses
+from backup import mysql_backup
 
 os.environ['FLET_WEB_APP_PATH'] = '/connect'
 current_directory = os.path.dirname(os.path.abspath(__file__))
@@ -154,7 +156,7 @@ def main(page: ft.Page):
         bottom_sheet.height = 120
         bottom_sheet.content = ft.Column(
             [
-                ft.Text(f"{child['name']}\nВыберите новую группу", size=16, weight=ft.FontWeight.W_200),
+                ft.Text(f"{child['name']}\nВыберите новую группу", size=16, weight=ft.FontWeight.W_200, text_align=ft.TextAlign.CENTER),
                 ft.Row(
                     controls=[
                         ft.FilledTonalButton(text='1', on_click=lambda _: set_child_group(1)),
@@ -163,10 +165,11 @@ def main(page: ft.Page):
                         ft.FilledTonalButton(text='4', on_click=lambda _: set_child_group(4)),
                         ft.FilledTonalButton(text='5', on_click=lambda _: set_child_group(5))
                     ],
+                    width=600,
                     scroll=ft.ScrollMode.AUTO
                 )
             ],
-            width=600
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER
         )
         bottom_sheet.open()
         bottom_sheet.sheet.data = child
@@ -175,7 +178,7 @@ def main(page: ft.Page):
         data = page.session.get('children_list')
         child_col.controls.clear()
         for child in data:
-            if e.control.value in child['name']:
+            if e.control.value.lower() in child['name'].lower():
                 child_col.controls.append(
                     ft.ListTile(
                         title=ft.Text(child['name'], size=16),
@@ -216,6 +219,7 @@ def main(page: ft.Page):
         """
 
         make_db_request(query)
+        db.reconnect()
 
     def insert_children_info(table_filepath: str):
         dlg_loading.loading_text = "Добавляем детей"
@@ -416,8 +420,8 @@ def main(page: ft.Page):
         DELETE FROM crodconnect.teachers WHERE pass_phrase = %s;
         """
         make_db_request(query, (pass_phrase, pass_phrase, pass_phrase,))
-        time.sleep(2)
         dlg_loading.close()
+        db.reconnect()
         if db.result['status'] == "ok":
             open_sb("Модуль удалён")
             change_screen("modules_info")
@@ -431,7 +435,7 @@ def main(page: ft.Page):
         bottom_sheet.height = 100
         bottom_sheet.content = ft.Column(
             [
-                ft.Text("Выберите новую группу", size=18, weight=ft.FontWeight.W_200),
+                ft.Text("Выберите новую группу", size=16, weight=ft.FontWeight.W_200),
                 ft.Row(
                     controls=[
                         ft.FilledTonalButton(text='1', on_click=lambda _: change_mentor_group(1)),
@@ -440,9 +444,11 @@ def main(page: ft.Page):
                         ft.FilledTonalButton(text='4', on_click=lambda _: change_mentor_group(4)),
                         ft.FilledTonalButton(text='5', on_click=lambda _: change_mentor_group(5))
                     ],
-                    scroll=ft.ScrollMode.AUTO
+                    scroll=ft.ScrollMode.AUTO,
+                    width=600
                 )
-            ]
+            ],
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER
         )
         bottom_sheet.open()
         bottom_sheet.sheet.data = e.control.data
@@ -460,7 +466,7 @@ def main(page: ft.Page):
         if db.result['status'] == "ok":
             dlg_info.title = "Изменение группы"
             dlg_info.content = ft.Text(
-                f"{child['name']} переведен(-а) в группу №{new_group}",
+                f"{child['name']} переведен(-а) в группу №{new_group}. Информация отправлена воспитателям.",
                 width=600, size=16, weight=ft.FontWeight.W_200
             )
             dlg_info.open()
@@ -706,9 +712,48 @@ def main(page: ft.Page):
 
         return card
 
+    def open_popup(e: ft.ControlEvent):
+        target = e.control.data['target']
+
+        if target == 'modules_info':
+            controls = [
+                ft.ListTile(
+                    title=ft.Text('Создать модуль'),
+                    leading=ft.Icon(ft.icons.CREATE_NEW_FOLDER, color=ft.colors.GREEN),
+                    on_click=lambda _: change_screen("create_module")
+                ),
+                ft.ListTile(
+                    title=ft.Text('Удалить модули'),
+                    subtitle=ft.Text('Полное удаление информации о текущих модулях'),
+                    leading=ft.Icon(ft.icons.DELETE_SWEEP, color=ft.colors.RED),
+                    on_click=lambda _: open_confirmation("remove_modules")
+                ),
+                ft.ListTile(
+                    title=ft.Text('Удалить записи'),
+                    subtitle=ft.Text('Удаление информации об участниках модулей'),
+                    leading=ft.Icon(ft.icons.GROUP_REMOVE, color=ft.colors.RED),
+                    on_click=lambda _: open_confirmation("remove_modules_records")
+                )
+            ]
+
+        elif target == 'reboot_menu':
+            controls = [
+                ft.ListTile(
+                    title=ft.Text('Перезагрузить сервер'),
+                    subtitle=ft.Text('Остановка всех сервисов и перезапуск сервера'),
+                    leading=ft.Icon(ft.icons.DEVELOPER_BOARD, ft.colors.AMBER),
+                    on_click=lambda _: open_confirmation("reboot_server")
+                ),
+            ]
+
+        bottom_sheet.content = ft.Column(controls=controls, scroll=ft.ScrollMode.AUTO)
+        bottom_sheet.height = 300
+        bottom_sheet.open()
+
     def change_screen(target: str):
         logging.info(f"Changing screen to: {target}")
 
+        bottom_sheet.close()
         page.controls.clear()
         page.appbar.visible = False
         page.appbar.actions.clear()
@@ -839,7 +884,6 @@ def main(page: ft.Page):
             page.update()
 
             systemd_list = get_system_list()
-            time.sleep(2)
             if systemd_list:
                 systemd_card.color = ft.colors.RED
                 systemd_text.value = "Обнаружены нерабочие сервисы"
@@ -871,25 +915,18 @@ def main(page: ft.Page):
 
         elif target == "modules_info":
             page.appbar.actions = [
-                ft.PopupMenuButton(
-                    items=[
-                        ft.PopupMenuItem(
-                            text="Новый модуль",
-                            icon=ft.icons.LIBRARY_ADD,
-                            on_click=lambda _: change_screen("create_module")
-                        ),
-                        ft.Divider(thickness=1),
-                        ft.PopupMenuItem(
-                            text="Удалить модули",
-                            icon=ft.icons.DELETE_FOREVER,
-                            on_click=lambda _: open_confirmation("remove_modules")
-                        ),
-                        ft.PopupMenuItem(
-                            text="Удалить записи",
-                            icon=ft.icons.DELETE,
-                            on_click=lambda _: open_confirmation("remove_modules_records")
-                        ),
-                    ]
+                ft.Container(
+                    ft.Row(
+                        [
+                            ft.IconButton(icon=ft.icons.RESTART_ALT, on_click=lambda _: change_screen("modules_info"), tooltip="Обновить"),
+                            ft.IconButton(
+                                icon=ft.icons.APPS,
+                                on_click=open_popup,
+                                data={'target': 'modules_info'}
+                            ),
+                        ]
+                    ),
+                    padding=ft.padding.only(right=10)
                 )
             ]
             dlg_loading.loading_text = "Загрузка"
@@ -949,6 +986,10 @@ def main(page: ft.Page):
                             col={"lg": 1}
                         )
                         col.controls.append(card)
+                if not admins_list:
+                    col.controls.append(
+                        ft.Row([ft.FilledTonalButton(text='Создать модуль', icon=ft.icons.CREATE_NEW_FOLDER, on_click=lambda _: change_screen('create_module'))], alignment=ft.MainAxisAlignment.CENTER)
+                    )
                 page.add(col)
                 dlg_loading.close()
 
@@ -1158,7 +1199,8 @@ def main(page: ft.Page):
                         doctype='navigation'
                     )
                 ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                width=600
             )
             page.add(col)
 
@@ -1177,18 +1219,20 @@ def main(page: ft.Page):
             )
             page.add(col)
 
-
         elif target == "reboot_menu":
             page.appbar.actions = [
                 ft.Container(
-                    ft.PopupMenuButton(
-                        items=[
-                            ft.PopupMenuItem(text="Обновить", icon=ft.icons.RESTART_ALT, on_click=lambda _: change_screen("reboot_menu")),
-                            ft.PopupMenuItem(text="Перезагрузка сервера", icon=ft.icons.VIEW_COMPACT_ALT, on_click=lambda _: open_confirmation("reboot_server")),
+                    ft.Row(
+                        [
+                            ft.IconButton(icon=ft.icons.RESTART_ALT, on_click=lambda _: change_screen("reboot_menu"), tooltip="Обновить"),
+                            ft.IconButton(
+                                icon=ft.icons.APPS,
+                                on_click=open_popup,
+                                data={'target': 'reboot_menu'}
+                            )
                         ]
                     ),
-                    # ft.IconButton(ft.icons.RESTART_ALT, on_click=lambda _: change_screen("reboot_menu")),
-                    padding=10
+                    padding=ft.padding.only(right=10)
                 )
             ]
 
@@ -1411,7 +1455,6 @@ def main(page: ft.Page):
 
     def password_confirmed():
         bottom_sheet.close()
-        # open_sb("Действие подтверждено", ft.colors.GREEN)
         action = bottom_sheet.sheet.data[1]
         if action == "upload_children":
             cildren_table_picker.pick_files(
@@ -1424,6 +1467,7 @@ def main(page: ft.Page):
             change_screen("edit_env")
 
         elif action == "remove_modules":
+            mysql_backup()
             dlg_loading.loading_text = "Удаляем модули"
             dlg_loading.open()
 
@@ -1441,9 +1485,11 @@ def main(page: ft.Page):
             dlg_loading.close()
 
         elif action == "remove_module":
+            mysql_backup()
             remove_module(page.session.get('remove_module_pass_phrase'))
 
         elif action == "remove_modules_records":
+            mysql_backup()
             dlg_loading.loading_text = "Удаляем записи"
             dlg_loading.open()
 
@@ -1458,9 +1504,14 @@ def main(page: ft.Page):
             dlg_loading.close()
 
         elif action == "reboot_server":
-            dlg_loading.loading_text = "Перезагрузка"
-            dlg_loading.open()
-            # to-do: перезагрузка сервера
+            dlg_info.title = "Перезагрузка сервера"
+            dlg_info.content = ft.Text(
+                "Запрос на перезагрузку сервера отправлен. Все сервисы будут недоступны в течение нескольких минут.",
+                width=600, size=16, weight=ft.FontWeight.W_200
+            )
+            dlg_info.open()
+            if platform.system() == "Linux":
+                subprocess.run("sudo reboot", shell=True)
 
         elif action == "admin_show_qrlist":
             change_screen("select_qr_group")
@@ -1469,13 +1520,13 @@ def main(page: ft.Page):
             delete_telegram_message(page.session.get('confirmation_data'))
 
     def open_confirmation(action: str, type: str = 'simple', tid=None):
-
+        bottom_sheet.close()
         actions_descrition = {
             'upload_children': {
-                'title': "Загрузка таблицы"
+                'title': "Обновление списка детей"
             },
             'edit_stream': {
-                'title': "Конфигурация"
+                'title': "Доступ к конфигурации"
             },
             'remove_modules': {
                 'title': "Удаление модулей"
@@ -1500,7 +1551,7 @@ def main(page: ft.Page):
 
         bottom_sheet.content = ft.Column(
             [
-                ft.Text("Отправили код в Telegram", size=16, weight=ft.FontWeight.W_200, text_align=ft.TextAlign.CENTER),
+                ft.Text(f"{actions_descrition[action]['title']}\nОтправили код в Telegram", size=16, weight=ft.FontWeight.W_200, text_align=ft.TextAlign.CENTER),
             ],
             width=600,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER

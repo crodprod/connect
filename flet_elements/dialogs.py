@@ -91,7 +91,8 @@ class BottomSheet:
                     # Text(self.title, size=20, weight=FontWeight.W_400),
                     self.content
                 ],
-                height=self.height
+                height=self.height,
+                width=800
             ),
             padding=15
         )
