@@ -675,7 +675,7 @@ def main(page: ft.Page):
 
                 if db.result['status'] == "ok":
                     if type(modules) == dict: modules = [modules]
-                    navigation_filename = wording.wording.get_modules_navigation(modules, shift_name['name'])
+                    navigation_filename = wording.wording.get_modules_navigation(modules, shift_name)
                     filepath = f"{current_directory}/wording/generated/{navigation_filename}.pdf"
 
                     caption += "Навигация по образовательным модулям"
