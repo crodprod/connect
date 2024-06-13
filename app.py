@@ -1426,10 +1426,8 @@ def main(page: ft.Page):
     def check_confirmation():
         user_code = confirmation_code_field.value
         if str(bottom_sheet.sheet.data[0]) == user_code or user_code == "admina":
-            if page.session.get('confirmation_data') is not None:
-                delete_telegram_message(page.session.get('confirmation_data'))
             bottom_sheet.close()
-            open_sb("Действие подтверждено", ft.colors.GREEN)
+            # open_sb("Действие подтверждено", ft.colors.GREEN)
             action = bottom_sheet.sheet.data[1]
             if action == "upload_children":
                 cildren_table_picker.pick_files(
@@ -1483,14 +1481,14 @@ def main(page: ft.Page):
             elif action == "admin_show_qrlist":
                 change_screen("select_qr_group")
 
+            if page.session.get('confirmation_data') is not None:
+                delete_telegram_message(page.session.get('confirmation_data'))
 
         else:
-            confirmation_code_field.text_style = ft.TextStyle(color=ft.colors.RED, letter_spacing=20)
-            # confirmation_code_field.border_color = ft.colors.RED
+            confirmation_code_field.text_style = ft.TextStyle(color=ft.colors.RED, letter_spacing=10, weight=ft.FontWeight.W_600)
             page.update()
             time.sleep(2)
-            confirmation_code_field.text_style = ft.TextStyle(color=None, letter_spacing=20)
-            # confirmation_code_field.border_color = None
+            confirmation_code_field.text_style = ft.TextStyle(color=None, letter_spacing=10, weight=ft.FontWeight.W_600)
             page.update()
         confirmation_code_field.value = ""
 
@@ -1522,12 +1520,13 @@ def main(page: ft.Page):
 
         bottom_sheet.content = ft.Column(
             [
-                ft.Text("Отправили код в Telegram", size=16, weight=ft.FontWeight.W_200, text_align=ft.TextAlign.START),
+                ft.Text("Отправили код в Telegram", size=16, weight=ft.FontWeight.W_200, text_align=ft.TextAlign.CENTER),
                 confirmation_code_field,
             ],
-            width=600
+            width=600,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER
         )
-        bottom_sheet.height = 150
+        bottom_sheet.height = 500
 
         confirmation_code = random.randint(111111, 999999)
         bottom_sheet.sheet.data = [confirmation_code, action]
@@ -1544,7 +1543,10 @@ def main(page: ft.Page):
 
             id = tid
 
-        confirmation_code_field.focus()
+        try:
+            confirmation_code_field.focus()
+        except Exception:
+            pass
         data = send_telegam_message(
             id,
             f"\n\nВаш код подтверждения: `{confirmation_code}`"
@@ -1555,9 +1557,9 @@ def main(page: ft.Page):
     confirmation_code_field = ft.TextField(
         hint_text="●●●●●●",
         border="none",
-        max_length=6,
-        text_style=ft.TextStyle(letter_spacing=20),
-        text_size=20,
+        cursor_height=0,
+        text_style=ft.TextStyle(letter_spacing=10, weight=ft.FontWeight.W_600),
+        text_size=25,
         on_change=check_confirmation_code,
         keyboard_type=ft.KeyboardType.NUMBER,
         text_align=ft.TextAlign.CENTER
