@@ -1485,10 +1485,12 @@ def main(page: ft.Page):
 
 
         else:
-            confirmation_code_field.border_color = ft.colors.RED
+            confirmation_code_field.text_style = ft.TextStyle(color=ft.colors.RED, letter_spacing=20)
+            # confirmation_code_field.border_color = ft.colors.RED
             page.update()
             time.sleep(2)
-            confirmation_code_field.border_color = None
+            confirmation_code_field.text_style = ft.TextStyle(color=None, letter_spacing=20)
+            # confirmation_code_field.border_color = None
             page.update()
         confirmation_code_field.value = ""
 
@@ -1539,9 +1541,10 @@ def main(page: ft.Page):
 
         elif type == 'telegram':
             bottom_sheet.open()
-            confirmation_code_field.focus()
+
             id = tid
 
+        confirmation_code_field.focus()
         data = send_telegam_message(
             id,
             f"\n\nВаш код подтверждения: `{confirmation_code}`"
@@ -1550,8 +1553,9 @@ def main(page: ft.Page):
             page.session.set('confirmation_data', data)
 
     confirmation_code_field = ft.TextField(
-        # hint_text="●●●●●●",
+        hint_text="●●●●●●",
         border="none",
+        max_length=6,
         text_style=ft.TextStyle(letter_spacing=20),
         text_size=20,
         on_change=check_confirmation_code,
