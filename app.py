@@ -1539,6 +1539,7 @@ def main(page: ft.Page):
 
         elif type == 'telegram':
             bottom_sheet.open()
+            confirmation_code_field.focus()
             id = tid
 
         data = send_telegam_message(
@@ -1549,9 +1550,10 @@ def main(page: ft.Page):
             page.session.set('confirmation_data', data)
 
     confirmation_code_field = ft.TextField(
-        hint_text="●●●●●●",
+        # hint_text="●●●●●●",
+        border="none",
         text_style=ft.TextStyle(letter_spacing=20),
-        text_size=25,
+        text_size=20,
         on_change=check_confirmation_code,
         keyboard_type=ft.KeyboardType.NUMBER,
         text_align=ft.TextAlign.CENTER
