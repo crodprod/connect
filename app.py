@@ -1421,7 +1421,7 @@ def main(page: ft.Page):
 
     def check_confirmation():
         user_code = confirmation_code_field.value
-        if bottom_sheet.sheet.data[0] == user_code or user_code == "admin":
+        if str(bottom_sheet.sheet.data[0]) == user_code or user_code == "admin":
             bottom_sheet.close()
             open_sb("Действие подтверждено", ft.colors.GREEN)
             action = bottom_sheet.sheet.data[1]
@@ -1514,33 +1514,34 @@ def main(page: ft.Page):
 
         bottom_sheet.content = ft.Column(
             [
+                ft.Text("Отправили код в Telegram", size=16, weight=ft.FontWeight.W_200, text_align=ft.TextAlign.START),
                 confirmation_code_field,
-                ft.FilledTonalButton(
-                    text="Подтвердить",
-                    icon=ft.icons.CHECK,
-                    on_click=lambda _: check_confirmation()
+                ft.Row(
+                    [
+                        ft.FilledTonalButton(
+                            text="Подтвердить",
+                            icon=ft.icons.CHECK,
+                            on_click=lambda _: check_confirmation()
+                        )
+                    ],
+                    alignment=ft.MainAxisAlignment.END
                 )
             ],
             width=600,
-            height=300
+            height=800
         )
 
-        # dialog_confirmation.title.controls[0].content.value = actions_descrition[action]['title']
-        confirmation_code = os.urandom(3).hex()
-        # dialog_confirmation.data = [confirmation_code, action]
+        confirmation_code = random.randint(111111, 999999)
         bottom_sheet.sheet.data = [confirmation_code, action]
 
         if type == 'simple':
-            # подтверждение из панели управления
             if is_telegrammed('confirm'):
-                # open_dialog(dialog_confirmation)
                 bottom_sheet.open()
                 id = password_field.data['telegram_id']
             else:
                 return
 
         elif type == 'telegram':
-            # open_dialog(dialog_confirmation)
             bottom_sheet.open()
             id = tid
 
@@ -1550,25 +1551,11 @@ def main(page: ft.Page):
             f"\n\nДля подтверждения действия в ЦРОД.Коннект введите `{confirmation_code}`"
         )
 
-    confirmation_code_field = ft.TextField(hint_text="Код подтверждения", on_submit=lambda _: check_confirmation())
-
-    dialog_confirmation = ft.AlertDialog(
-        modal=True,
-        title=ft.Row(
-            [
-                ft.Container(ft.Text(size=20, weight=ft.FontWeight.W_400), expand=True),
-                ft.IconButton(ft.icons.CLOSE_ROUNDED, on_click=lambda _: close_dialog(dialog_confirmation))
-            ]
-        ),
-        content=confirmation_code_field,
-        actions_alignment=ft.MainAxisAlignment.END,
-        actions=[
-            ft.FilledTonalButton(
-                text="Продолжить",
-                icon=ft.icons.ARROW_FORWARD_IOS,
-                on_click=lambda _: check_confirmation()
-            )
-        ]
+    confirmation_code_field = ft.TextField(
+        hint_text="Код подтверждения",
+        on_submit=lambda _: check_confirmation(),
+        keyboard_type=ft.KeyboardType.NUMBER,
+        text_align=ft.TextAlign.CENTER
     )
 
     def login():
