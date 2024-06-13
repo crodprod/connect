@@ -304,6 +304,7 @@ def main(page: ft.Page):
 
         page.drawer.open = False
         page.update()
+        time.sleep(0.3)
 
         if data['sec'] == "app":
             if data['act'] == "exit":
@@ -694,24 +695,13 @@ def main(page: ft.Page):
         dlg_loading.close()
 
     def get_document_card(title: str, sb: str, icon: ft.icons, doctype: str):
-        card = ft.Card(
-            ft.Container(
-                content=ft.Column(
-                    [
-                        ft.ListTile(
-                            title=ft.Text(title),
-                            subtitle=ft.Text(sb),
-                            leading=ft.Icon(icon),
-                            data={'doctype': doctype},
-                            on_click=generate_document
-                        )
-                    ],
-                    height=100,
-                    alignment=ft.MainAxisAlignment.CENTER,
-                    horizontal_alignment=ft.CrossAxisAlignment.CENTER
-                ),
-            ),
-            width=600
+
+        card = ft.ListTile(
+            title=ft.Text(title),
+            subtitle=ft.Text(sb),
+            leading=ft.Icon(icon),
+            data={'doctype': doctype},
+            on_click=generate_document
         )
 
         return card
@@ -1515,7 +1505,7 @@ def main(page: ft.Page):
             width=600,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER
         )
-        bottom_sheet.height = 500
+        bottom_sheet.height = 300
 
         if type == 'simple':
             if is_telegrammed('confirm'):
