@@ -21,7 +21,7 @@ from transliterate import translit
 import wording.wording
 from bot_elements.functions import load_config_file
 from database import MySQL, RedisTable
-from flet_elements.classes import NewModule, NewAdmin, NewMentor, NewChild
+from flet_elements.classes import NewModule, NewAdmin, NewMentor, NewChild, ConfirmationCodeField
 from flet_elements.dialogs import InfoDialog, LoadingDialog, BottomSheet
 from flet_elements.functions import remove_folder_content, get_hello, get_system_list
 from flet_elements.screens import screens
@@ -1419,78 +1419,64 @@ def main(page: ft.Page):
     cildren_table_picker = ft.FilePicker(on_result=upload_tables)
     page.overlay.append(cildren_table_picker)
 
-    def check_confirmation_code(e: ft.ControlEvent):
-        if len(e.control.value) == 6:
-            check_confirmation()
+    def password_confirmed():
+        bottom_sheet.close()
+        # open_sb("Действие подтверждено", ft.colors.GREEN)
+        action = bottom_sheet.sheet.data[1]
+        if action == "upload_children":
+            cildren_table_picker.pick_files(
+                allow_multiple=False,
+                file_type=ft.FilePickerFileType.CUSTOM,
+                allowed_extensions=['xls', 'xlsx']
+            )
 
-    def check_confirmation():
-        user_code = confirmation_code_field.value
-        if str(bottom_sheet.sheet.data[0]) == user_code or user_code == "admina":
-            bottom_sheet.close()
-            # open_sb("Действие подтверждено", ft.colors.GREEN)
-            action = bottom_sheet.sheet.data[1]
-            if action == "upload_children":
-                cildren_table_picker.pick_files(
-                    allow_multiple=False,
-                    file_type=ft.FilePickerFileType.CUSTOM,
-                    allowed_extensions=['xls', 'xlsx']
-                )
+        elif action == "edit_stream":
+            change_screen("edit_env")
 
-            elif action == "edit_stream":
-                change_screen("edit_env")
+        elif action == "remove_modules":
+            dlg_loading.loading_text = "Удаляем модули"
+            dlg_loading.open()
 
-            elif action == "remove_modules":
-                dlg_loading.loading_text = "Удаляем модули"
-                dlg_loading.open()
+            query = "TRUNCATE TABLE crodconnect.modules_records"
+            make_db_request(query)
 
-                query = "TRUNCATE TABLE crodconnect.modules_records"
-                make_db_request(query)
+            query = "TRUNCATE TABLE crodconnect.teachers"
+            make_db_request(query)
 
-                query = "TRUNCATE TABLE crodconnect.teachers"
-                make_db_request(query)
+            query = "TRUNCATE TABLE crodconnect.modules"
+            if make_db_request(query) is not None:
+                open_sb("Учебные модули удалены", ft.colors.GREEN)
 
-                query = "TRUNCATE TABLE crodconnect.modules"
-                if make_db_request(query) is not None:
-                    open_sb("Учебные модули удалены", ft.colors.GREEN)
+            change_screen("modules_info")
+            dlg_loading.close()
 
-                change_screen("modules_info")
-                dlg_loading.close()
+        elif action == "remove_module":
+            remove_module(page.session.get('remove_module_pass_phrase'))
 
-            elif action == "remove_module":
-                remove_module(page.session.get('remove_module_pass_phrase'))
+        elif action == "remove_modules_records":
+            dlg_loading.loading_text = "Удаляем записи"
+            dlg_loading.open()
 
-            elif action == "remove_modules_records":
-                dlg_loading.loading_text = "Удаляем записи"
-                dlg_loading.open()
+            query = "TRUNCATE TABLE crodconnect.modules_records"
+            make_db_request(query)
 
-                query = "TRUNCATE TABLE crodconnect.modules_records"
-                make_db_request(query)
+            query = "UPDATE crodconnect.modules SET seats_real = 0"
+            if make_db_request(query) is not None:
+                open_sb("Записи на модули удалены", ft.colors.GREEN)
 
-                query = "UPDATE crodconnect.modules SET seats_real = 0"
-                if make_db_request(query) is not None:
-                    open_sb("Записи на модули удалены", ft.colors.GREEN)
+            change_screen("modules_info")
+            dlg_loading.close()
 
-                change_screen("modules_info")
-                dlg_loading.close()
+        elif action == "reboot_server":
+            dlg_loading.loading_text = "Перезагрузка"
+            dlg_loading.open()
+            # to-do: перезагрузка сервера
 
-            elif action == "reboot_server":
-                dlg_loading.loading_text = "Перезагрузка"
-                dlg_loading.open()
-                # to-do: перезагрузка сервера
+        elif action == "admin_show_qrlist":
+            change_screen("select_qr_group")
 
-            elif action == "admin_show_qrlist":
-                change_screen("select_qr_group")
-
-            if page.session.get('confirmation_data') is not None:
-                delete_telegram_message(page.session.get('confirmation_data'))
-
-        else:
-            confirmation_code_field.text_style = ft.TextStyle(color=ft.colors.RED, letter_spacing=10, weight=ft.FontWeight.W_600)
-            page.update()
-            time.sleep(2)
-            confirmation_code_field.text_style = ft.TextStyle(color=None, letter_spacing=10, weight=ft.FontWeight.W_600)
-            page.update()
-        confirmation_code_field.value = ""
+        if page.session.get('confirmation_data') is not None:
+            delete_telegram_message(page.session.get('confirmation_data'))
 
     def open_confirmation(action: str, type: str = 'simple', tid=None):
 
@@ -1518,18 +1504,18 @@ def main(page: ft.Page):
             }
         }
 
+        confirmation_code = random.randint(111111, 999999)
+        bottom_sheet.sheet.data = [confirmation_code, action]
+        pswd_field = ConfirmationCodeField(page=page, true_password=confirmation_code, func=password_confirmed)
+
         bottom_sheet.content = ft.Column(
             [
                 ft.Text("Отправили код в Telegram", size=16, weight=ft.FontWeight.W_200, text_align=ft.TextAlign.CENTER),
-                confirmation_code_field,
             ],
             width=600,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER
         )
         bottom_sheet.height = 500
-
-        confirmation_code = random.randint(111111, 999999)
-        bottom_sheet.sheet.data = [confirmation_code, action]
 
         if type == 'simple':
             if is_telegrammed('confirm'):
@@ -1543,10 +1529,6 @@ def main(page: ft.Page):
 
             id = tid
 
-        try:
-            confirmation_code_field.focus()
-        except Exception:
-            pass
         data = send_telegam_message(
             id,
             f"\n\nВаш код подтверждения: `{confirmation_code}`"
@@ -1554,16 +1536,7 @@ def main(page: ft.Page):
         if data:
             page.session.set('confirmation_data', data)
 
-    confirmation_code_field = ft.TextField(
-        hint_text="●●●●●●",
-        border="none",
-        cursor_height=0,
-        text_style=ft.TextStyle(letter_spacing=10, weight=ft.FontWeight.W_600),
-        text_size=25,
-        on_change=check_confirmation_code,
-        keyboard_type=ft.KeyboardType.NUMBER,
-        text_align=ft.TextAlign.CENTER
-    )
+        pswd_field.create(target=bottom_sheet.content)
 
     def login():
         query = "SELECT * FROM crodconnect.admins WHERE password = %s"

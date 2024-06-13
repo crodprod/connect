@@ -1,4 +1,5 @@
 import re
+import time
 
 from flet import *
 from flet_elements.modules_locations import locations
@@ -175,3 +176,71 @@ class NewChild:
 
         self.page.update()
 
+
+class ConfirmationCodeField:
+    def __init__(self, page: Page, true_password, func):
+        self.page = page
+        self.user_input = None
+        self.true_password = str(true_password)
+        self.is_correct = None
+        self.func = func
+        self.password_row = Row(
+            controls=[
+                TextField(
+                    border="underline",
+                    cursor_height=0,
+                    text_style=TextStyle(weight=FontWeight.W_600),
+                    text_size=20,
+                    keyboard_type=KeyboardType.NUMBER,
+                    text_align=TextAlign.CENTER,
+                    width=45,
+                    on_change=self.go_to_next_field,
+                    data={'num': i}
+                ) for i in range(6)
+            ],
+            alignment=MainAxisAlignment.CENTER
+        )
+
+    def go_to_next_field(self, e: ControlEvent):
+        if e.control.value == "":
+            new_index = e.control.data['num'] - 1
+        else:
+            new_index = e.control.data['num'] + 1
+        if new_index == 6 and self.password_row.controls[-1] != "":
+            self.user_input = ''.join([self.password_row.controls[i].value for i in range(6)])
+            self.check_input()
+
+        elif 0 <= new_index <= 5:
+            self.password_row.controls[new_index].focus()
+            self.page.update()
+
+    def check_input(self):
+        self.is_correct = self.true_password == self.user_input
+        if self.true_password == self.user_input:
+            self.set_color(colors.GREEN)
+            self.func()
+        else:
+            self.set_color(colors.RED)
+            time.sleep(1)
+            self.set_color(colors.TRANSPARENT, all=True)
+            self.clear()
+
+    def set_color(self, color: colors, all: bool = False):
+        for i in range(6):
+            self.password_row.controls[i].bgcolor = color
+            if not all:
+                self.page.update()
+                time.sleep(0.05)
+        self.page.update()
+
+    def clear(self):
+        for i in range(6):
+            self.password_row.controls[i].value = None
+        self.password_row.controls[0].focus()
+        self.page.update()
+
+
+    def create(self, target):
+        target.controls.append(Container(self.password_row))
+        # self.password_row.controls[0].focus()
+        self.page.update()
