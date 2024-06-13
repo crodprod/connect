@@ -57,9 +57,9 @@ redis = RedisTable(
 redis.connect()
 
 statuses = {
-    'can_respond': True,
-    'feedback': True,
-    'modules_record': False,
+    'can_respond': False,
+    'feedback': False,
+    'modules_record': True,
     'radio': False
 }
 radio_request_user_list = []
@@ -464,6 +464,8 @@ async def start_radio(callback: types.CallbackQuery):
 
     children_list = make_db_request(query)
     if db.result['status'] == 'ok':
+        children_list = dict_to_list(children_list)
+        print(children_list)
         for child in children_list:
             await bot.send_message(
                 chat_id=child['telegram_id'],
@@ -789,7 +791,7 @@ async def callbacks_radio(callback: types.CallbackQuery, callback_data: RadioReq
                "\n\n<b>К сожалению, твоя заявка отклонена, возможно она не прошла цензуру, но ты можешь отправить новую, пока наше радио в эфире</b>"
         status = callback.message.text + "\n\n🔴 Отклонено"
 
-    await callback.message.edit_text(callback.message.text + status)
+    await callback.message.edit_text(status)
     await bot.send_message(
         chat_id=child_id,
         text=text
@@ -854,9 +856,12 @@ async def send_recorded_modules_info(child_id: int, callback: types.CallbackQuer
 
 @dp.callback_query(RecordModuleToChildCallbackFactory.filter())
 async def callbacks_children(callback: types.CallbackQuery, callback_data: RecordModuleToChildCallbackFactory, state: FSMContext):
-    query = "INSERT INTO crodconnect.modules_records (child_id, module_id) VALUES (%s, %s)"
+    query = """
+        INSERT INTO crodconnect.modules_records (child_id, module_id) VALUES (%s, %s);
+        UPDATE crodconnect.modules SET seats_real = seats_real + 1 WHERE id = %s;
+    """
 
-    make_db_request(query, (callback_data.child_id, callback_data.module_id,))
+    make_db_request(query, (callback_data.child_id, callback_data.module_id, callback_data.module_id, ))
     if db.result['status'] == 'ok':
         await recording_to_module_process(callback_data.child_id, callback)
     else:
@@ -1055,6 +1060,7 @@ async def check_for_date():
         kb = btn.as_markup()
 
     else:
+        statuses['can_respond'] = True
         logging.info("Shift not ended, running responding to actions")
         text = "✅ Бот доступен для всех групп пользователей"
         kb = None

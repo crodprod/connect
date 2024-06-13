@@ -582,6 +582,7 @@ def main(page: ft.Page):
                     group_list = make_db_request(query)
 
                     if group_list is not None:
+                        if type(group_list) == dict: group_list = [group_list]
                         if group_list:
                             qr_list_groups_filename = wording.wording.get_qr_list(s, group_list)
                             filepath = f"{current_directory}/wording/generated/{qr_list_groups_filename}.pdf"
