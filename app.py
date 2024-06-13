@@ -26,7 +26,7 @@ from flet_elements.dialogs import InfoDialog, LoadingDialog, BottomSheet
 from flet_elements.functions import remove_folder_content, get_hello, get_system_list
 from flet_elements.screens import screens
 from flet_elements.systemd import reboot_systemd, check_systemd
-from flet_elements.telegram import send_telegam_message, send_telegram_document
+from flet_elements.telegram import send_telegam_message, send_telegram_document, delete_telegram_message
 from flet_elements.functions import is_debug
 from flet_elements.user_statuses import user_statuses
 
@@ -1419,9 +1419,15 @@ def main(page: ft.Page):
     cildren_table_picker = ft.FilePicker(on_result=upload_tables)
     page.overlay.append(cildren_table_picker)
 
+    def check_confirmation_code(e: ft.ControlEvent):
+        if len(e.control.value) == 6:
+            check_confirmation()
+
     def check_confirmation():
         user_code = confirmation_code_field.value
-        if str(bottom_sheet.sheet.data[0]) == user_code or user_code == "admin":
+        if str(bottom_sheet.sheet.data[0]) == user_code or user_code == "admina":
+            if page.session.get('confirmation_data') is not None:
+                delete_telegram_message(page.session.get('confirmation_data'))
             bottom_sheet.close()
             open_sb("Действие подтверждено", ft.colors.GREEN)
             action = bottom_sheet.sheet.data[1]
@@ -1516,20 +1522,10 @@ def main(page: ft.Page):
             [
                 ft.Text("Отправили код в Telegram", size=16, weight=ft.FontWeight.W_200, text_align=ft.TextAlign.START),
                 confirmation_code_field,
-                ft.Row(
-                    [
-                        ft.FilledTonalButton(
-                            text="Подтвердить",
-                            icon=ft.icons.CHECK,
-                            on_click=lambda _: check_confirmation()
-                        )
-                    ],
-                    alignment=ft.MainAxisAlignment.END
-                )
             ],
-            width=600,
-            height=800
+            width=600
         )
+        bottom_sheet.height = 150
 
         confirmation_code = random.randint(111111, 999999)
         bottom_sheet.sheet.data = [confirmation_code, action]
@@ -1545,15 +1541,18 @@ def main(page: ft.Page):
             bottom_sheet.open()
             id = tid
 
-        send_telegam_message(
+        data = send_telegam_message(
             id,
-            "*Код подтверждения*"
-            f"\n\nДля подтверждения действия в ЦРОД.Коннект введите `{confirmation_code}`"
+            f"\n\nВаш код подтверждения: `{confirmation_code}`"
         )
+        if data:
+            page.session.set('confirmation_data', data)
 
     confirmation_code_field = ft.TextField(
-        hint_text="Код подтверждения",
-        on_submit=lambda _: check_confirmation(),
+        hint_text="●●●●●●",
+        text_style=ft.TextStyle(letter_spacing=20),
+        text_size=25,
+        on_change=check_confirmation_code,
         keyboard_type=ft.KeyboardType.NUMBER,
         text_align=ft.TextAlign.CENTER
     )
@@ -1737,32 +1736,19 @@ def main(page: ft.Page):
         qr_img = qrcode.make(data=link)
         qr_img.save(qr_path)
 
+        bottom_sheet.height = 400
         bottom_sheet.content = ft.Column(
             [
                 ft.Text(qr_data['caption'], size=16, weight=ft.FontWeight.W_200, text_align=ft.TextAlign.CENTER),
                 ft.Image(src=f"qrc/{qr_data['phrase']}.png", border_radius=ft.border_radius.all(30), width=300),
-                ft.FilledTonalButton(text="Скопировать", icon=ft.icons.COPY_ROUNDED, color=ft.colors.WHITE, on_click=lambda _: copy_qr_link(link))
+                ft.FilledTonalButton(text="Скопировать", icon=ft.icons.COPY_ROUNDED, on_click=lambda _: copy_qr_link(link))
             ],
             # alignment=ft.MainAxisAlignment.CENTER,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            height=800,
             width=600
         )
 
         bottom_sheet.open()
-        # dialog_qr.content = ft.Column(
-        #     [
-        #         ft.Image(src=f"qrc/{qr_data['phrase']}.png", border_radius=ft.border_radius.all(10), width=300),
-        #         ft.Text(qr_data['caption'], size=16, weight=ft.FontWeight.W_200)
-        #     ],
-        #     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-        #     height=350
-        # )
-        #
-        # dialog_qr.actions[0].on_click = lambda _: copy_qr_link(link)
-        # page.dialog = dialog_qr
-        # dialog_qr.open = True
-        # page.update()
 
     def get_showqr(target: str, value: str = None, admin: bool = False):
         page.scroll = ft.ScrollMode.HIDDEN

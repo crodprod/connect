@@ -16,6 +16,10 @@ def send_telegam_message(tID, message_text):
     data = {'chat_id': tID, 'text': message_text, "parse_mode": "Markdown"}
     response = post(url=url, data=data)
     info(response.json())
+    if response.status_code == 200:
+        return {'chat_id': response.json()['result']['chat']['id'], 'message_id': response.json()['result']['message_id']}
+    else:
+        return False
 
 
 def send_telegram_document(tID, filepath: str, description: str):
@@ -31,3 +35,14 @@ def send_telegram_document(tID, filepath: str, description: str):
             return True
         except exceptions.ConnectTimeout:
             return False
+
+
+def delete_telegram_message(data):
+    url = f'https://api.telegram.org/bot{getenv("BOT_TOKEN")}/deleteMessage'
+    data = {'chat_id': data['chat_id'], 'message_id': data['message_id']}
+    try:
+        response = post(url=url, data=data)
+    except Exception as e:
+        error(f"deleting message: {e}")
+        return False
+    return True
