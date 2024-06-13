@@ -217,7 +217,6 @@ class ConfirmationCodeField:
     def check_input(self):
         self.is_correct = self.true_password == self.user_input
         if self.true_password == self.user_input:
-            self.set_color(colors.GREEN, all=True)
             self.func()
         else:
             self.set_color(colors.RED, all=True)
