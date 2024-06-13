@@ -1421,10 +1421,10 @@ def main(page: ft.Page):
 
     def check_confirmation():
         user_code = confirmation_code_field.value
-        if dialog_confirmation.data[0] == user_code or user_code == "admin":
-            close_dialog(dialog_confirmation)
+        if bottom_sheet.sheet.data[0] == user_code or user_code == "admin":
+            bottom_sheet.close()
             open_sb("Действие подтверждено", ft.colors.GREEN)
-            action = dialog_confirmation.data[1]
+            action = bottom_sheet.sheet.data[1]
             if action == "upload_children":
                 cildren_table_picker.pick_files(
                     allow_multiple=False,
@@ -1512,20 +1512,36 @@ def main(page: ft.Page):
             }
         }
 
-        dialog_confirmation.title.controls[0].content.value = actions_descrition[action]['title']
+        bottom_sheet.content = ft.Column(
+            [
+                confirmation_code_field,
+                ft.FilledTonalButton(
+                    text="Подтвердить",
+                    icon=ft.icons.CHECK,
+                    on_click=lambda _: check_confirmation()
+                )
+            ],
+            width=600,
+            height=300
+        )
+
+        # dialog_confirmation.title.controls[0].content.value = actions_descrition[action]['title']
         confirmation_code = os.urandom(3).hex()
-        dialog_confirmation.data = [confirmation_code, action]
+        # dialog_confirmation.data = [confirmation_code, action]
+        bottom_sheet.sheet.data = [confirmation_code, action]
 
         if type == 'simple':
             # подтверждение из панели управления
             if is_telegrammed('confirm'):
-                open_dialog(dialog_confirmation)
+                # open_dialog(dialog_confirmation)
+                bottom_sheet.open()
                 id = password_field.data['telegram_id']
             else:
                 return
 
         elif type == 'telegram':
-            open_dialog(dialog_confirmation)
+            # open_dialog(dialog_confirmation)
+            bottom_sheet.open()
             id = tid
 
         send_telegam_message(
@@ -1611,29 +1627,6 @@ def main(page: ft.Page):
     )
 
     # Диалоги
-    dialog_info_text = ft.Text(size=16, width=600, weight=ft.FontWeight.W_200)
-    dialog_info_title = ft.Text(size=20, weight=ft.FontWeight.W_400)
-    dialog_info = ft.AlertDialog(
-        modal=True,
-        title=dialog_info_title,
-        actions_alignment=ft.MainAxisAlignment.END,
-        actions=[ft.TextButton("OK", on_click=lambda _: close_dialog(dialog_info))],
-        content=dialog_info_text
-    )
-
-    dialog_qr = ft.AlertDialog(
-        title=ft.Row(
-            [
-                ft.Container(ft.Text("QR-код", size=20, weight=ft.FontWeight.W_400), expand=True),
-                ft.IconButton(ft.icons.CLOSE_ROUNDED, on_click=lambda _: close_dialog(dialog_qr))
-            ]
-        ),
-        modal=True,
-        actions_alignment=ft.MainAxisAlignment.END,
-        actions=[
-            ft.ElevatedButton(text="Скопировать", icon=ft.icons.COPY_ROUNDED, color=ft.colors.WHITE)
-        ]
-    )
 
     env_field = ft.TextField(
         multiline=True
@@ -1738,7 +1731,7 @@ def main(page: ft.Page):
         # копирование пригласительной ссылки
 
         page.set_clipboard(link)
-        close_dialog(dialog_qr)
+        bottom_sheet.close()
         open_sb("Ссылка скопирована")
 
     def get_user_qr(e: ft.ControlEvent):
@@ -1757,19 +1750,32 @@ def main(page: ft.Page):
         qr_img = qrcode.make(data=link)
         qr_img.save(qr_path)
 
-        dialog_qr.content = ft.Column(
+        bottom_sheet.content = ft.Column(
             [
-                ft.Image(src=f"qrc/{qr_data['phrase']}.png", border_radius=ft.border_radius.all(10), width=300),
-                ft.Text(qr_data['caption'], size=16, weight=ft.FontWeight.W_200)
+                ft.Text(qr_data['caption'], size=16, weight=ft.FontWeight.W_200, text_align=ft.TextAlign.CENTER),
+                ft.Image(src=f"qrc/{qr_data['phrase']}.png", border_radius=ft.border_radius.all(30), width=300),
+                ft.FilledTonalButton(text="Скопировать", icon=ft.icons.COPY_ROUNDED, color=ft.colors.WHITE, on_click=lambda _: copy_qr_link(link))
             ],
+            # alignment=ft.MainAxisAlignment.CENTER,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            height=350
+            height=800,
+            width=600
         )
 
-        dialog_qr.actions[0].on_click = lambda _: copy_qr_link(link)
-        page.dialog = dialog_qr
-        dialog_qr.open = True
-        page.update()
+        bottom_sheet.open()
+        # dialog_qr.content = ft.Column(
+        #     [
+        #         ft.Image(src=f"qrc/{qr_data['phrase']}.png", border_radius=ft.border_radius.all(10), width=300),
+        #         ft.Text(qr_data['caption'], size=16, weight=ft.FontWeight.W_200)
+        #     ],
+        #     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        #     height=350
+        # )
+        #
+        # dialog_qr.actions[0].on_click = lambda _: copy_qr_link(link)
+        # page.dialog = dialog_qr
+        # dialog_qr.open = True
+        # page.update()
 
     def get_showqr(target: str, value: str = None, admin: bool = False):
         page.scroll = ft.ScrollMode.HIDDEN
@@ -2017,7 +2023,7 @@ def main(page: ft.Page):
     if all([fl[1]['status'] for fl in startup.items()]):
         if not url_path[0]:
             if is_debug():
-                password_field.value = "lrrrtm"
+                password_field.value = "yasuperadmin"
                 change_screen("login")
                 login()
             else:
@@ -2061,7 +2067,7 @@ def main(page: ft.Page):
 
 if __name__ == "__main__":
     if platform.system() == "Windows":
-        os.environ['DEBUG'] = "0"
+        os.environ['DEBUG'] = "1"
     if is_debug():
         ft.app(
             target=main,

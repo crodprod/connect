@@ -76,7 +76,8 @@ class LoadingDialog:
 class BottomSheet:
     def __init__(self, page: Page):
         self.sheet = bs(
-            show_drag_handle=True
+            show_drag_handle=True,
+            is_scroll_controlled=True
         )
         self.content = None
         self.title = None
