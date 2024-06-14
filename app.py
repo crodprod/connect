@@ -53,6 +53,10 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s")
 
 startup = {
+    'mysql': {
+        'status': True,
+        'msg': ""
+    },
     'redis': {
         'status': True,
         'msg': ""
@@ -122,6 +126,10 @@ def main(page: ft.Page):
 
     redis.connect()
     db.connect()
+
+    if db.result['status'] == "error":
+        startup['mysql']['status'] = False
+        startup['mysql']['msg'] = db.result['message']
 
     if redis.result['status'] == "error":
         startup['redis']['status'] = False
