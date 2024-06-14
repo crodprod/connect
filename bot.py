@@ -45,7 +45,7 @@ db = MySQL(
     user=os.getenv('DB_USER'),
     password=os.getenv('DB_PASSWORD'),
     db_name=os.getenv('DB_NAME'),
-    port=3310
+    port=os.getenv('DB_PORT')
 )
 
 redis = RedisTable(
@@ -1059,6 +1059,7 @@ async def start_feedback():
 async def check_for_start_module():
     config = load_config_file('config.json')
 
+    print(config['module_record'], statuses['modules_record'])
     if config['module_record'] and not statuses['modules_record']:
         logging.info('Schedule: openning modules record')
         statuses['modules_record'] = True
