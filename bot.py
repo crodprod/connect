@@ -1051,8 +1051,8 @@ async def check_for_date():
     shift = load_config_file('config.json')['shift']
     dates = shift['shift_list'][shift['current_shift']]['date']
 
-    text = f"Текущая смена/поток: {shift['shift_list'][shift['current_shift']]['name']}" \
-           f"{shift['shift_list'][shift['current_shift']]['date']['start']} - {shift['shift_list'][shift['current_shift']]['date']['end']}\n\n"
+    text = f"<b>Текущая смена/поток:</b> {shift['shift_list'][shift['current_shift']]['name']}" \
+           f"<b>Даты проведения:</b>\n{shift['shift_list'][shift['current_shift']]['date']['start']} - {shift['shift_list'][shift['current_shift']]['date']['end']}\n\n"
 
     if not (datetime.datetime.strptime(dates['start'], '%Y-%m-%d') <= datetime.datetime.now() <= datetime.datetime.strptime(dates['end'], '%Y-%m-%d')):
         logging.info("Shift ended, responding to actions stopped")
