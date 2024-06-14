@@ -56,14 +56,14 @@
   },
   "auto_actions": {
     "start_feedback": {
-      "hour": 21,
-      "minute": 53,
+      "hour": 16,
+      "minute": 0,
       "working_period": "mon-sat"
     },
     "stop_feedback": {
-      "hour": 20,
-      "minute": 0,
-      "working_period": "mon-sun"
+      "hour": 22,
+      "minute": 7,
+      "working_period": "mon-sat"
     }
   }
 }

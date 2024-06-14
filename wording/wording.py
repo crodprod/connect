@@ -162,7 +162,7 @@ def create_badge_sheet(final_file_name, insert_paths, spacing_mm=2, border_width
 
 
 def get_grouplist(group_list: list, group_num: int):
-    filename = f"grouplist_{group_num}_{datetime.now().date().strftime('%d%m%Y')}"
+    filename = f"grouplist_{group_num}_{datetime.now().date().strftime('%d_%m_%Y')}"
     info(f"{filename}: creating file")
 
     data = []
@@ -210,7 +210,7 @@ def get_qr_list(group: str, group_list: list, value: str = ""):
         extra = f"_{value}"
     else:
         extra = ""
-    filename = f"qrlist_{group}{extra}_{datetime.now().date().strftime('%d%m%Y')}"
+    filename = f"qrlist_{group}{extra}_{datetime.now().date().strftime('%d_%m_%Y')}"
     doc = docx.Document(f'{current_directory}/templates/qr_table.docx')
 
     group_list.sort(key=lambda user: user['name'])
@@ -262,7 +262,7 @@ def get_feedback(module_name: str, feedback_list: []):
     filename = f"feedback_{module_name}_{creation_date}"
     doc = docx.Document(f'{current_directory}/templates/feedback.docx')
 
-    title = f"Обратная связь по модулю «{module_name}» за {creation_date}"
+    title = f"Обратная связь по модулю «{module_name}» за {creation_date.replace('_', '.')}"
     main_text = ""
 
     for fb in feedback_list:
@@ -272,14 +272,14 @@ def get_feedback(module_name: str, feedback_list: []):
     run = paragraph_title.add_run(title)
     font = run.font
     font.size = Pt(15)
-    font.name = "Arial"
+    font.name = "Montserrat SemiBold"
     font.bold = True
 
     paragraph_body = doc.add_paragraph()
     run = paragraph_body.add_run(main_text)
     font = run.font
     font.size = Pt(13)
-    font.name = "Arial"
+    font.name = "Montserrat SemiBold"
 
     doc.save(f"{current_directory}/generated/{filename}.docx")
     convert_to_pdf(filename)
@@ -288,7 +288,7 @@ def get_feedback(module_name: str, feedback_list: []):
 
 
 def get_modules_navigation(modules_list: list, title: str):
-    filename = f"navigation_{datetime.now().date().strftime('%d%m%Y')}"
+    filename = f"navigation_{datetime.now().date().strftime('%d_%m_%Y')}"
     doc = docx.Document(f'{current_directory}/templates/navigation.docx')
 
     title_table = doc.tables[0]

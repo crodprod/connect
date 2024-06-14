@@ -58,8 +58,8 @@ redis.connect()
 
 statuses = {
     'can_respond': False,
-    'feedback': False,
-    'modules_record': True,
+    'feedback': True,
+    'modules_record': False,
     'radio': False
 }
 radio_request_user_list = []
@@ -334,6 +334,7 @@ async def get_module_feedback_today(module_id: int):
     feedback_list = make_db_request(query, (module_id, datetime.datetime.now().date()))
     if db.result['status'] == 'ok':
         feedback_list = dict_to_list(feedback_list)
+        print(feedback_list)
         return feedback_list
     else:
         await raise_error(db.result['message'])
@@ -945,6 +946,7 @@ async def create_feedback_proccess(user_info: [], callback: types.CallbackQuery,
     query = "SELECT * FROM crodconnect.modules WHERE id IN (SELECT module_id FROM crodconnect.modules_records WHERE child_id = %s) AND id NOT IN (SELECT module_id FROM crodconnect.feedback WHERE child_id = %s AND date = %s)"
 
     need_to_give_feedback_list = make_db_request(query, (user_info['id'], user_info['id'], datetime.datetime.now().date(),))
+    need_to_give_feedback_list = dict_to_list(need_to_give_feedback_list)
     if db.result['status'] == 'ok':
         if len(need_to_give_feedback_list) > 0:
             module = need_to_give_feedback_list[0]
