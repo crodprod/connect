@@ -514,6 +514,7 @@ async def callbacks_mentors(callback: types.CallbackQuery, callback_data: Mentor
                         group_list = make_db_request(query, (user_info['group_num'],))
                         if db.result['status'] == 'ok':
                             group_list = dict_to_list(group_list)
+                            group_list.sort(key=lambda el: el['name'])
                             msg = await callback.message.answer(
                                 text="<b>Список группы создаётся...</b>"
                             )
@@ -649,8 +650,11 @@ async def check_apply_to_channel(callback: types.CallbackQuery):
 async def callnacks_select_module(callback: types.CallbackQuery, callback_data: SelectModuleCallbackFactory):
     module_id, module_name = callback_data.module_id, callback_data.name
     group_list = await get_module_children_list(module_id)
+
     if group_list is not None:
+        group_list = dict_to_list(group_list)
         if len(group_list) > 0:
+            group_list.sort(key=lambda el: el['name'])
             await callback.message.delete()
 
             text = f"<b>Модуль «{module_name}»</b>\n\n"
@@ -685,6 +689,8 @@ async def callbacks_teachers(callback: types.CallbackQuery, callback_data: Teach
                             group_list = await get_module_children_list(user_info['module_id'])
                             if group_list is not None:
                                 if len(group_list) > 0:
+                                    group_list = dict_to_list(group_list)
+                                    group_list.sort(key=lambda el: el['name'])
                                     await callback.message.delete()
 
                                     text = f"<b>Модуль «{module_info['name']}»</b>\n\n"
