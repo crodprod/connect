@@ -1036,6 +1036,7 @@ async def callbacks_children(callback: types.CallbackQuery, callback_data: Child
 
 
 async def start_feedback():
+    logging.info('Schedule: starting feedback')
     if statuses['can_respond']:
         statuses['feedback'] = True
         query = "SELECT * FROM crodconnect.children WHERE status = 'active'"
@@ -1085,6 +1086,7 @@ async def check_for_date():
 
 
 async def stop_feedback():
+    logging.info('Schedule: stopping feedback')
     if statuses['can_respond']:
         statuses['feedback'] = False
         query = "SELECT * FROM crodconnect.teachers WHERE status = 'active'"
@@ -1148,6 +1150,7 @@ async def main():
         day_of_week=schedule['stop_feedback']['working_period'],
         hour=schedule['stop_feedback']['hour'],
         minute=schedule['stop_feedback']['minute'])
+
     scheduler.add_job(
         check_for_date,
         "cron",

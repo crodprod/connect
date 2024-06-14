@@ -56,8 +56,8 @@
   },
   "auto_actions": {
     "start_feedback": {
-      "hour": 16,
-      "minute": 0,
+      "hour": 21,
+      "minute": 53,
       "working_period": "mon-sat"
     },
     "stop_feedback": {
