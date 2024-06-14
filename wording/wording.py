@@ -44,6 +44,18 @@ def insert_metrics(filepath, group_num):
     doc.save(f"{current_directory}/generated/{filepath}.docx")
 
 
+def images_to_pdf(filepath_list: list, output_filename: str):
+    images_list = []
+
+    main_img = Image.open(filepath_list[0])
+    for filepath in filepath_list[1:]:
+        img = Image.open(filepath)
+        img.convert('RGB')
+        images_list.append(img)
+
+    main_img.save(output_filename, save_all=True, append_images=images_list)
+
+
 def convert_to_pdf(filepath: str):
     info(f"{filepath}: started converting to pdf")
 
@@ -73,24 +85,80 @@ def fill_badge(badge_type: str, name: str, caption: str):
     filename = f"badge_{badge_type}_{translitted_name}"
     info(f'Badging: generating {badge_type} for {name} ({caption})')
 
+    initials = name.split()
+    multiline = True if len(initials) == 3 else False
+
+    fontpath = f'{current_directory}/fonts/Bebas.ttf'
+
+    name_font = ImageFont.truetype(font=fontpath, size=85)
+    caption_font = ImageFont.truetype(font=fontpath, size=60)
+
     badge = Image.open(f'{current_directory}/templates/badges/{badge_type}.png')
     drawer = ImageDraw.Draw(badge)
 
-    fontpath = f'{current_directory}/fonts/Bebas.ttf'
-    caption_font = ImageFont.truetype(font=fontpath, size=70)
-    name_font = ImageFont.truetype(font=fontpath, size=85)
+    caption_position = (badge.size[0] // 2, 530)
 
-    position_caption = (543.5, 550)
+    drawer.text(caption_position, caption.upper(), font=caption_font, fill='black', anchor='mm', align='center')
 
-    initials = name.split()
-    start_y = 220
-    for n in initials:
-        drawer.text((543.5, start_y), n.upper(), font=name_font, fill='black', anchor='mm')
-        start_y += 90
-    drawer.text(position_caption, caption.upper(), font=caption_font, fill='black', anchor='mm')
+    if multiline:
+        name = f"{initials[1]} {initials[2]}\n{initials[0]}"
+        drawer.multiline_text((badge.size[0] // 2, badge.size[1] // 2 + 20), name.upper(), font=name_font, fill='black', anchor='mm', align='center', spacing=15)
+    else:
+        drawer.text((badge.size[0] // 2, badge.size[1] // 2 + 20), name.upper(), font=name_font, fill='black', anchor='mm', align='center')
 
     badge.save(f"{current_directory}/generated/{filename}.png")
+    # badge.show()
     info(f'Badging: saved {filename}.png')
+
+
+def create_badge_sheet(final_file_name, insert_paths, spacing_mm=2, border_width_mm=0.3):
+    A4_width_mm = 210
+    A4_height_mm = 297
+
+    insert_width_mm = 90
+    insert_height_mm = 55
+
+    margin_mm = 12.7
+
+    dpi = 300
+    mm_to_inches = 1 / 25.4
+    A4_width_px = int(A4_width_mm * dpi * mm_to_inches)
+    A4_height_px = int(A4_height_mm * dpi * mm_to_inches)
+    insert_width_px = int(insert_width_mm * dpi * mm_to_inches)
+    insert_height_px = int(insert_height_mm * dpi * mm_to_inches)
+    margin_px = int(margin_mm * dpi * mm_to_inches)
+    spacing_px = int(spacing_mm * dpi * mm_to_inches)
+    border_width_px = int(border_width_mm * dpi * mm_to_inches)
+
+    a4_image = Image.new('RGB', (A4_width_px, A4_height_px), 'white')
+    draw = ImageDraw.Draw(a4_image)
+
+    total_insert_width_px = insert_width_px + 2 * border_width_px + spacing_px
+    total_insert_height_px = insert_height_px + 2 * border_width_px + spacing_px
+
+    columns = (A4_width_px - 2 * margin_px + spacing_px) // total_insert_width_px
+    rows = (A4_height_px - 2 * margin_px + spacing_px) // total_insert_height_px
+
+    current_insert_index = 0
+
+    for row in range(rows):
+        for col in range(columns):
+            if current_insert_index < len(insert_paths):
+                insert_image = Image.open(f"{current_directory}/generated/{insert_paths[current_insert_index]}")
+                insert_image_resized = insert_image.resize((insert_width_px, insert_height_px))
+
+                x = margin_px + col * total_insert_width_px
+                y = margin_px + row * total_insert_height_px
+
+                draw.rectangle([x, y, x + insert_width_px + 2 * border_width_px, y + insert_height_px + 2 * border_width_px], outline="black", width=border_width_px)
+
+                a4_image.paste(insert_image_resized, (x + border_width_px, y + border_width_px))
+
+                current_insert_index += 1
+            else:
+                break
+
+    a4_image.save(final_file_name)
 
 
 def get_grouplist(group_list: list, group_num: int):

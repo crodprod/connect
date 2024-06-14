@@ -8,6 +8,7 @@ import re
 import subprocess
 import time
 import zipfile
+from itertools import islice
 
 import flet as ft
 import qrcode
@@ -23,7 +24,7 @@ from transliterate import translit
 import wording.wording
 from bot_elements.functions import load_config_file, update_config_file
 from database import MySQL, RedisTable
-from flet_elements.classes import NewModule, NewAdmin, NewMentor, NewChild, ConfirmationCodeField
+from flet_elements.classes import NewModule, NewAdmin, NewMentor, NewChild, ConfirmationCodeField, ExtraUsers
 from flet_elements.dialogs import InfoDialog, LoadingDialog, BottomSheet
 from flet_elements.functions import remove_folder_content, get_hello, get_system_list
 from flet_elements.screens import screens
@@ -408,11 +409,13 @@ def main(page: ft.Page):
             open_sb("Модуль добавлен", ft.colors.GREEN)
 
     def add_new_admin():
-        query = "INSERT INTO crodconnect.admins (name, pass_phrase, password) VALUES (%s, %s, %s)"
+        query = "INSERT INTO crodconnect.admins (name, pass_phrase, password, post, access) VALUES (%s, %s, %s, %s, %s)"
         name = new_admin.name.value.strip()
+        post = new_admin.post.value.strip()
+        access = 1 if new_admin.panel_access.value else 0
         pass_phrase = create_passphrase(name)
         password = os.urandom(3).hex()
-        response = make_db_request(query, (name, pass_phrase, password,))
+        response = make_db_request(query, (name, pass_phrase, password, post))
         if response is not None:
             change_screen("admins_info")
             open_sb("Администратор добавлен", ft.colors.GREEN)
@@ -724,44 +727,65 @@ def main(page: ft.Page):
 
             elif doctype == 'badge':
                 query = """
-                    SELECT name, 'mentors' AS post, group_num AS caption FROM crodconnect.mentors
+                    SELECT name, 'mentors' AS post_, group_num AS caption FROM crodconnect.mentors
                     UNION
-                    SELECT name, 'teachers' AS post, 'Наставник' AS caption FROM crodconnect.teachers;
+                    SELECT name, 'teachers' AS post_, 'Наставник' AS caption FROM crodconnect.teachers
+                    UNION
+                    SELECT name, 'admins' AS post_, post AS caption FROM crodconnect.admins WHERE status != 'creator';
                 """
                 users = make_db_request(query)
                 if db.result['status'] == 'ok':
                     for user in users:
-                        if user['post'] == 'mentors':
+                        if user['post_'] == 'mentors':
                             user['caption'] = f"Воспитатель {user['caption']} группы"
 
+                        if not user['caption']: user['caption'] = ''
                         wording.wording.fill_badge(
-                            user['post'],
+                            user['post_'],
                             user['name'],
                             user['caption']
                         )
-                    caption += "Набор бейджей"
-
                     badges_filepaths = [file for file in os.listdir(f"{current_directory}/wording/generated") if file.startswith('badge_')]
-                    filepath = f"{current_directory}/wording/generated/badges.zip"
 
-                    with zipfile.ZipFile(filepath, 'w') as zipf:
-                        for file in badges_filepaths:
-                            zipf.write(f"{current_directory}/wording/generated/{file}", os.path.basename(file))
+                    def chunked_iterable(iterable, size):
+                        it = iter(iterable)
+                        return iter(lambda: list(islice(it, size)), [])
+
+                    chunks = list(chunked_iterable(badges_filepaths, 8))
+
+                    final_badges = []
+                    for index, chunk in enumerate(chunks):
+                        filepath = f"{current_directory}/wording/generated/badges_list_{index}.png"
+                        final_badges.append(filepath)
+                        wording.wording.create_badge_sheet(
+                            final_file_name=filepath,
+                            insert_paths=chunk
+                        )
+
+                    pdf_filename = f"{current_directory}/wording/generated/badges_all_{datetime.datetime.now().strftime('%Y_%m_%d')}.pdf"
+                    wording.wording.images_to_pdf(filepath_list=final_badges, output_filename=pdf_filename)
+
+                    caption += "Набор бейджей"
 
                     if send_telegram_document(
                             tID=response['telegram_id'],
-                            filepath=filepath,
+                            filepath=pdf_filename,
                             description=caption + "\n\n#документы"
                     ):
                         open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
                     else:
                         open_sb("Ошибка Telegram", ft.colors.RED)
 
-                    if os.path.exists(filepath):
-                        os.remove(filepath)
+                    if os.path.exists(pdf_filename):
+                        os.remove(pdf_filename)
+
                     for filepath in badges_filepaths:
                         if os.path.exists(f"{current_directory}/wording/generated/{filepath}"):
                             os.remove(f"{current_directory}/wording/generated/{filepath}")
+
+                    for filepath in final_badges:
+                        if os.path.exists(filepath):
+                            os.remove(filepath)
 
         pdf_filepaths.clear()
         dlg_loading.close()
@@ -1042,6 +1066,11 @@ def main(page: ft.Page):
             )
             page.add(col)
 
+        elif target == "extra_users":
+            extra_users.clear()
+            extra_users.add_user()
+            page.add(extra_users.users_col)
+
         elif target == "modules_info":
             page.appbar.actions = [
                 ft.Container(
@@ -1180,6 +1209,8 @@ def main(page: ft.Page):
             col = ft.Column(
                 controls=[
                     new_admin.name,
+                    new_admin.post,
+                    ft.Row([new_admin.panel_access, ft.Text("доступ к панели", size=16, weight=ft.FontWeight.W_200)]),
                     ft.Row([btn_add_admin], alignment=ft.MainAxisAlignment.END)
                 ],
                 width=600,
@@ -1279,6 +1310,7 @@ def main(page: ft.Page):
                                         ft.Container(
                                             ft.ListTile(
                                                 title=ft.Text(admin['name']),
+                                                subtitle=ft.Text(f"{admin['post']}"),
                                                 leading=ft.Icon(
                                                     ft.icons.ACCOUNT_CIRCLE,
                                                     color=user_statuses[admin['status']]['color'],
@@ -1544,6 +1576,7 @@ def main(page: ft.Page):
     new_admin = NewAdmin(page=page, save_btn=btn_add_admin)
     new_mentor = NewMentor(page=page, save_btn=btn_add_mentor)
     new_child = NewChild(page=page, save_btn=btn_add_child)
+    extra_users = ExtraUsers(page=page)
 
     child_to_change_group = ft.TextField(
         label="ФИО ребёнка",
@@ -1721,9 +1754,18 @@ def main(page: ft.Page):
             if not admin_info:
                 open_sb("Ошибка доступа", ft.colors.RED)
             else:
-                if admin_info['status'] in ['active', 'creator']:
+                if admin_info['status'] in ['active', 'creator'] and bool(admin_info['access']):
                     password_field.data = admin_info
                     change_screen("main")
+
+                elif not bool(admin_info['access']):
+                    password_field.value = ''
+                    dlg_info.title = "Авторизация"
+                    dlg_info.content = ft.Text(
+                        "У вас недостаточно прав для доступа к панели управления. Если вы считаете, что произошла ошибка, то обратитесь к администрации.",
+                        width=600, size=16, weight=ft.FontWeight.W_200
+                    )
+                    dlg_info.open()
 
                 elif admin_info['status'] == 'frozen':
                     password_field.value = ''

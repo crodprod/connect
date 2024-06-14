@@ -185,6 +185,18 @@ screens = {
         },
         'scroll_mode': base_scroll_mode
     },
+    'extra_users': {
+        'appbar': {
+            'visible': True,
+            'leading': {
+                'icon': menu_icon,
+                'action': "drawer",
+                'target': None
+            },
+            'title': "Создание бейджиков"
+        },
+        'scroll_mode': base_scroll_mode
+    },
     'errors': {
         'appbar': {
             'visible': False,

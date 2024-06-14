@@ -20,6 +20,7 @@ months = {
     12: "декабря",
 }
 
+
 class NewModule:
     def __init__(self, page: Page, save_btn):
         self.page = page
@@ -78,9 +79,16 @@ class NewAdmin:
             hint_text="Иванов Иван Иванович",
             on_change=lambda _: self.validate()
         )
+        self.post = TextField(
+            label="Должность",
+            prefix_icon=icons.WORK,
+            hint_text="Координатор смены",
+            on_change=lambda _: self.validate()
+        )
+        self.panel_access = Checkbox(value=True)
 
     def validate(self):
-        if len(self.name.value.strip().split(" ")) in [2, 3]:
+        if len(self.name.value.strip().split(" ")) in [2, 3] and self.post.value:
             self.btn.disabled = False
         else:
             self.btn.disabled = True
@@ -89,6 +97,8 @@ class NewAdmin:
 
     def reset(self):
         self.name.value = ""
+        self.post.value = ""
+        self.panel_access.value = True
         self.btn.disabled = True
 
         self.page.update()
@@ -141,7 +151,7 @@ class NewChild:
             label="День",
             # prefix_icon=icons.CALENDAR_MONTH,
             # hint_text="10.10.2010",
-            options=[dropdown.Option(text=str(i), key='0'*(2-len(str(i))) + str(i)) for i in range(1, 32)],
+            options=[dropdown.Option(text=str(i), key='0' * (2 - len(str(i))) + str(i)) for i in range(1, 32)],
             on_change=lambda _: self.validate(),
             width=100
         )
@@ -274,4 +284,27 @@ class ConfirmationCodeField:
     def create(self, target):
         target.controls.append(Container(self.password_row))
         # self.password_row.controls[0].focus()
+        self.page.update()
+
+
+class ExtraUsers:
+    def __init__(self, page: Page):
+        self.page = page
+        self.users_col = Column(width=600)
+        self.btn_add_user = IconButton(icons.ADD, on_click=lambda _: self.add_user())
+        self.btn_continue = FilledTonalButton(text="Создать", on_click=lambda _: self.add_user())
+
+    def add_user(self):
+        self.users_col.controls.pop()
+        self.users_col.controls.append(TextField(label="Имя", data={'field_type': 'name'}))
+        self.users_col.controls.append(TextField(label="Должность", data={'field_type': 'name'}))
+        self.users_col.controls.append(Divider(thickness=1))
+        self.add_btns()
+        self.page.update()
+
+    def add_btns(self):
+        self.users_col.controls.append(Row([self.btn_add_user, self.btn_continue], alignment=MainAxisAlignment.END))
+
+    def clear(self):
+        self.users_col.controls = [Divider()]
         self.page.update()
