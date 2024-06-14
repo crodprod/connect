@@ -1052,7 +1052,7 @@ async def check_for_date():
     dates = shift['shift_list'][shift['current_shift']]['date']
 
     text = f"<b>Текущая смена/поток:</b> {shift['shift_list'][shift['current_shift']]['name']}" \
-           f"\n<b>Даты проведения:</b>\n{shift['shift_list'][shift['current_shift']]['date']['start']} - {shift['shift_list'][shift['current_shift']]['date']['end']}\n\n"
+           f"\n<b>Даты проведения:</b>{shift['shift_list'][shift['current_shift']]['date']['start']} - {shift['shift_list'][shift['current_shift']]['date']['end']}\n\n"
 
     if not (datetime.datetime.strptime(dates['start'], '%Y-%m-%d') <= datetime.datetime.now() <= datetime.datetime.strptime(dates['end'], '%Y-%m-%d')):
         logging.info("Shift ended, responding to actions stopped")
