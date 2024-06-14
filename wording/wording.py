@@ -82,9 +82,9 @@ def fill_badge(badge_type: str, name: str, caption: str):
 
     position_caption = (543.5, 550)
 
-    name = name.split()
+    initials = name.split()
     start_y = 220
-    for n in name:
+    for n in initials:
         drawer.text((543.5, start_y), n.upper(), font=name_font, fill='black', anchor='mm')
         start_y += 90
     drawer.text(position_caption, caption.upper(), font=caption_font, fill='black', anchor='mm')
