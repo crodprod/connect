@@ -1050,6 +1050,10 @@ async def check_for_date():
     logging.info("Check for shift end")
     shift = load_config_file('config.json')['shift']
     dates = shift['shift_list'][shift['current_shift']]['date']
+
+    text = f"Текущая смена/поток: {shift['shift_list'][shift['current_shift']]['name']}" \
+           f"{shift['shift_list'][shift['current_shift']]['date']['start']} - {shift['shift_list'][shift['current_shift']]['date']['end']}\n\n"
+
     if not (datetime.datetime.strptime(dates['start'], '%Y-%m-%d') <= datetime.datetime.now() <= datetime.datetime.strptime(dates['end'], '%Y-%m-%d')):
         logging.info("Shift ended, responding to actions stopped")
         statuses['can_respond'] = False
@@ -1057,13 +1061,13 @@ async def check_for_date():
             text="Открыть Коннект",
             url=f"{base_crod_url}/connect"
         )
-        text = "⛔ Бот отключен для детей, воспитателей и преподавателей. Чтобы открыть доступ к боту, добавьте дату начала и окончания следующей смены в Коннект"
+        text += "⛔ Бот отключен для детей, воспитателей и преподавателей. Чтобы открыть доступ к боту, измените текущую смену/поток в Коннекте или дождитесь начала смены/потока."
         kb = btn.as_markup()
 
     else:
         statuses['can_respond'] = True
         logging.info("Shift not ended, running responding to actions")
-        text = "✅ Бот доступен для всех групп пользователей"
+        text += "✅ Бот доступен для всех групп пользователей"
         kb = None
 
     await bot.send_message(
