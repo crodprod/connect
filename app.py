@@ -849,7 +849,7 @@ def main(page: ft.Page):
             width=600,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER
         )
-        bottom_sheet.height = 300
+        bottom_sheet.height = 1000
         bottom_sheet.open()
 
     def change_screen(target: str):
