@@ -9,6 +9,7 @@ import subprocess
 import time
 import zipfile
 from itertools import islice
+from xkcdpass import xkcd_password as xp
 
 import flet as ft
 import qrcode
@@ -102,6 +103,15 @@ def convert_date(input_date):
     return datetime.datetime.strftime(datetime.datetime.strptime(input_date, '%Y-%m-%d'), '%d.%m.%Y')
 
 
+def create_password():
+    wordfile = xp.locate_wordfile()
+    mywords = xp.generate_wordlist(wordfile=wordfile, min_length=6, max_length=6)
+
+    password = f"{xp.generate_xkcdpassword(mywords).split()[-1]}{random.randint(1111, 9999)}"
+
+    return password
+
+
 def main(page: ft.Page):
     page.vertical_alignment = ft.MainAxisAlignment.CENTER,
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
@@ -109,9 +119,9 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.DARK
     page.theme = ft.Theme(
         font_family="Geologica",
-        color_scheme=ft.ColorScheme(
-            primary=ft.colors.WHITE
-        )
+        # color_scheme=ft.ColorScheme(
+        #     primary=ft.colors.WHITE
+        # )
     )
     page.fonts = {
         "Geologica": "fonts/Geologica.ttf",
@@ -422,8 +432,8 @@ def main(page: ft.Page):
         post = new_admin.post.value.strip()
         access = 1 if new_admin.panel_access.value else 0
         pass_phrase = create_passphrase(name)
-        password = os.urandom(3).hex()
-        response = make_db_request(query, (name, pass_phrase, password, post))
+        password = create_password()
+        response = make_db_request(query, (name, pass_phrase, password, post, access,))
         if response is not None:
             change_screen("admins_info")
             open_sb("Администратор добавлен", ft.colors.GREEN)
@@ -863,7 +873,7 @@ def main(page: ft.Page):
             ]
 
         bottom_sheet.content = ft.Column(controls=controls, scroll=ft.ScrollMode.AUTO)
-        bottom_sheet.height = 300
+        bottom_sheet.height = 500
         bottom_sheet.open()
 
     def set_current_shift(e: ft.ControlEvent):
@@ -1064,11 +1074,11 @@ def main(page: ft.Page):
 
             systemd_list = get_system_list()
             if systemd_list:
-                systemd_card.color = ft.colors.RED
+                systemd_card.surface_tint_color = ft.colors.RED
                 systemd_text.value = "Обнаружены нерабочие сервисы"
                 systemd_btn.visible = True
             else:
-                systemd_card.color = ft.colors.GREEN
+                systemd_card.surface_tint_color = ft.colors.GREEN
                 systemd_text.value = "Все сервисы работают корректно"
                 systemd_btn.visible = False
 
@@ -1822,6 +1832,26 @@ def main(page: ft.Page):
                     )
                     dlg_info.open()
 
+                elif admin_info['status'] == 'waiting_for_registration':
+                    password_field.value = ''
+
+                    bottom_sheet.content = ft.Column(
+                        [
+                            ft.Text(
+                                "Чтобы продолжить, зарегистрируйтесь в Telegram-боте",
+                                width=600, size=16, weight=ft.FontWeight.W_200, text_align=ft.TextAlign.CENTER
+                            ),
+                            ft.FilledButton(
+                                text="Зарегистрироваться", icon=ft.icons.TELEGRAM, url=f"https://t.me/{os.getenv('BOT_NAME')}?start={admin_info['pass_phrase']}",
+                                on_click=lambda _: bottom_sheet.close(), style=ft.ButtonStyle(bgcolor="#2aabee", color=ft.colors.WHITE)
+                            )
+                        ],
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        alignment=ft.MainAxisAlignment.CENTER,
+                    )
+                    bottom_sheet.height = 100
+                    bottom_sheet.open()
+
                 elif admin_info['status'] == 'frozen':
                     password_field.value = ''
                     dlg_info.title = "Авторизация"
@@ -1849,7 +1879,7 @@ def main(page: ft.Page):
         password=True
     )
 
-    button_login = ft.ElevatedButton("Войти", width=250, on_click=lambda _: login(),
+    button_login = ft.FilledButton("Войти", width=250, on_click=lambda _: login(),
                                      disabled=False, height=50,
                                      icon=ft.icons.KEYBOARD_ARROW_RIGHT_ROUNDED)
 
