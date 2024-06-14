@@ -7,6 +7,7 @@ import random
 import re
 import subprocess
 import time
+import zipfile
 
 import flet as ft
 import qrcode
@@ -697,6 +698,48 @@ def main(page: ft.Page):
                         open_sb("Ошибка Telegram", ft.colors.RED)
                     if os.path.exists(filepath):
                         os.remove(filepath)
+
+            elif doctype == 'badge':
+                query = """
+                    SELECT name, 'mentors' AS post, group_num AS caption FROM crodconnect.mentors
+                    UNION
+                    SELECT name, 'teachers' AS post, 'Наставник' AS caption FROM crodconnect.teachers;
+                """
+                users = make_db_request(query)
+                if db.result['status'] == 'ok':
+                    for user in users:
+                        if user['post'] == 'mentors':
+                            user['caption'] = f"Воспитатель {user['caption']} группы"
+
+                        wording.wording.fill_badge(
+                            user['post'],
+                            user['name'],
+                            user['caption']
+                        )
+                    caption += "Набор бейджей"
+
+                    badges_filepaths = [file for file in os.listdir(f"{current_directory}/wording/generated") if file.startswith('badge_')]
+                    filepath = f"{current_directory}/wording/generated/badges.zip"
+
+                    with zipfile.ZipFile(filepath, 'w') as zipf:
+                        for file in badges_filepaths:
+                            zipf.write(f"{current_directory}/wording/generated/{file}", os.path.basename(file))
+
+                    if send_telegram_document(
+                            tID=response['telegram_id'],
+                            filepath=filepath,
+                            description=caption
+                    ):
+                        open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
+                    else:
+                        open_sb("Ошибка Telegram", ft.colors.RED)
+
+                    if os.path.exists(filepath):
+                        os.remove(filepath)
+                    for filepath in badges_filepaths:
+                        if os.path.exists(f"{current_directory}/wording/generated/{filepath}"):
+                            os.remove(f"{current_directory}/wording/generated/{filepath}")
+
         pdf_filepaths.clear()
         dlg_loading.close()
 
@@ -1197,6 +1240,12 @@ def main(page: ft.Page):
                         sb="Распределение модулей по аудиториям",
                         icon=ft.icons.LOCATION_ON,
                         doctype='navigation'
+                    ),
+                    get_document_card(
+                        title="Бейджики",
+                        sb="Создание бейджей для всех участников",
+                        icon=ft.icons.BADGE,
+                        doctype='badge'
                     )
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,

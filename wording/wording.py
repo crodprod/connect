@@ -1,16 +1,20 @@
 import math
 import os
+import random
 
 import docx
 import convertapi
 import qrcode
 from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
-from docx.shared import Pt, Inches
-from docxtpl import DocxTemplate
+from docx.shared import Pt, Inches, Mm
+from docxtpl import DocxTemplate, InlineImage
 from datetime import datetime
 from dotenv import load_dotenv
 from logging import basicConfig, INFO, info, error
+from re import sub
+from transliterate import translit
+from PIL import Image, ImageDraw, ImageFont
 
 basicConfig(
     level=INFO,
@@ -59,6 +63,32 @@ def convert_to_pdf(filepath: str):
 
     if os.path.exists(docx_file):
         os.remove(docx_file)
+
+
+def fill_badge(badge_type: str, name: str, caption: str):
+    translitted_name = sub(r'[^a-zA-Zа-яА-ЯёЁ]', '', translit(''.join(name.split()[:2]), language_code='ru', reversed=True))  # + str(random.randint(11111, 99999))
+
+    filename = f"badge_{badge_type}_{translitted_name}"
+    info(f'Badging: generating {badge_type} for {name} ({caption})')
+
+    badge = Image.open(f'{current_directory}/templates/badges/{badge_type}.png')
+    drawer = ImageDraw.Draw(badge)
+
+    fontpath = f'{current_directory}/fonts/Bebas.ttf'
+    caption_font = ImageFont.truetype(font=fontpath, size=70)
+    name_font = ImageFont.truetype(font=fontpath, size=85)
+
+    position_caption = (543.5, 550)
+
+    name_1, name_2, name_3 = (a for a in name.split())
+
+    drawer.text((543.5, 220), name_1.upper(), font=name_font, fill='black', anchor='mm')
+    drawer.text((543.5, 310), name_2.upper(), font=name_font, fill='black', anchor='mm')
+    drawer.text((543.5, 400), name_3.upper(), font=name_font, fill='black', anchor='mm')
+    drawer.text(position_caption, caption.upper(), font=caption_font, fill='black', anchor='mm')
+
+    badge.save(f"{current_directory}/generated/{filename}.png")
+    info(f'Badging: saved {filename}.png')
 
 
 def get_grouplist(group_list: list, group_num: int):
