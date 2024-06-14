@@ -13,3 +13,4 @@ transliterate==1.10.2
 pypdf==4.2.0
 redis==5.0.4
 schedule==1.2.1
+pillow==10.3.0
