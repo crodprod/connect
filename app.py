@@ -807,7 +807,6 @@ def main(page: ft.Page):
 
         if target == 'modules_info':
             module_record_open = load_config_file('config.json')['module_record']
-            print(module_record_open)
             if module_record_open:
                 module_record_tile = ft.ListTile(
                     title=ft.Text('Закрыть запись'),

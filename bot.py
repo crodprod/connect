@@ -334,7 +334,6 @@ async def get_module_feedback_today(module_id: int):
     feedback_list = make_db_request(query, (module_id, datetime.datetime.now().date()))
     if db.result['status'] == 'ok':
         feedback_list = dict_to_list(feedback_list)
-        print(feedback_list)
         return feedback_list
     else:
         await raise_error(db.result['message'])
@@ -467,7 +466,6 @@ async def start_radio(callback: types.CallbackQuery):
     children_list = make_db_request(query)
     if db.result['status'] == 'ok':
         children_list = dict_to_list(children_list)
-        print(children_list)
         for child in children_list:
             await bot.send_message(
                 chat_id=child['telegram_id'],
@@ -813,7 +811,6 @@ async def callbacks_admins(callback: types.CallbackQuery, callback_data: AdminsC
         user_status = await get_user_status('telegram_id', callback.from_user.id)
         if user_status is not None:
             if user_status == 'active':
-                print(action)
                 if action == "modules_list":
                     await get_module_list(callback)
 
@@ -1059,7 +1056,6 @@ async def start_feedback():
 async def check_for_start_module():
     config = load_config_file('config.json')
 
-    print(config['module_record'], statuses['modules_record'])
     if config['module_record'] and not statuses['modules_record']:
         logging.info('Schedule: openning modules record')
         statuses['modules_record'] = True
