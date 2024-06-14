@@ -31,6 +31,8 @@ def check_systemd(service_name: str) -> bool():
 
 
 def reboot_systemd(service_name: str):
+    if platform.system() == "Windows":
+        return False
     command = [systemctl_path, 'restart', f'{service_name}.service']
     process = Popen(command, stdout=PIPE, stderr=PIPE)
     if process.returncode != 0:

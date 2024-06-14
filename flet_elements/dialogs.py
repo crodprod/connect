@@ -1,4 +1,4 @@
-from flet import Page, AlertDialog, Row, Container, TextButton, Text, FontWeight, MainAxisAlignment, ProgressBar, Column, CrossAxisAlignment, BottomSheet as bs
+from flet import Page, AlertDialog, Row, Container, TextButton, Text, FontWeight, MainAxisAlignment, ProgressBar, Column, CrossAxisAlignment, BottomSheet as bs, ScrollMode
 
 
 class InfoDialog:
@@ -92,7 +92,8 @@ class BottomSheet:
                     self.content
                 ],
                 height=self.height,
-                width=800
+                width=800,
+                scroll=ScrollMode.AUTO
             ),
             padding=15
         )

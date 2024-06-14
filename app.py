@@ -21,7 +21,7 @@ from pypdf import PdfMerger
 from transliterate import translit
 
 import wording.wording
-from bot_elements.functions import load_config_file
+from bot_elements.functions import load_config_file, update_config_file
 from database import MySQL, RedisTable
 from flet_elements.classes import NewModule, NewAdmin, NewMentor, NewChild, ConfirmationCodeField
 from flet_elements.dialogs import InfoDialog, LoadingDialog, BottomSheet
@@ -91,6 +91,10 @@ def url_sign_check(sign: str, index: str):
     except Exception as e:
         logging.error(f"Redis: {e}")
         return -2
+
+
+def convert_date(input_date):
+    return datetime.datetime.strftime(datetime.datetime.strptime(input_date, '%Y-%m-%d'), '%d.%m.%Y')
 
 
 def main(page: ft.Page):
@@ -356,6 +360,24 @@ def main(page: ft.Page):
         phrase = f"{name}{os.urandom(3).hex()}"
 
         return phrase
+
+    def add_new_child():
+        query = "INSERT INTO crodconnect.children (name, group_num, birth, comment, parrent_name, parrent_phone, pass_phrase) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+        pass_phrase = create_passphrase(new_child.name.value)
+
+        month = '0' * (2 - len(new_child.birth_month.value)) + new_child.birth_month.value
+
+        make_db_request(query, (new_child.name.value, new_child.group.value,
+                                f"{new_child.birth_year.value}-{month}-{new_child.birth_day.value}",
+                                new_child.caption.value, new_child.parent_name.value, f"+7{new_child.phone.value}", pass_phrase,))
+        if db.result['status'] == 'ok':
+            dlg_info.title = "Добавление ребёнка"
+            dlg_info.content = ft.Text(
+                f"{new_child.name.value} добавлен(-а) в группу №{new_child.group.value}. Информация отправлена воспитателям.",
+                width=600, size=16, weight=ft.FontWeight.W_200
+            )
+            change_screen('main')
+            dlg_info.open()
 
     def add_new_mentor():
         query = "INSERT INTO crodconnect.mentors (name, group_num, pass_phrase) VALUES (%s, %s, %s)"
@@ -676,7 +698,8 @@ def main(page: ft.Page):
                             if os.path.exists(pdf):
                                 os.remove(pdf)
             elif doctype == "navigation":
-                shift_name = load_config_file('config.json')['shift']['name']
+                shift = load_config_file('config.json')['shift']
+                shift_name = shift['shift_list'][shift['current_shift']]['name']
 
                 query = "SELECT * FROM crodconnect.modules WHERE status = 'active'"
                 modules = make_db_request(query)
@@ -793,6 +816,42 @@ def main(page: ft.Page):
         bottom_sheet.height = 300
         bottom_sheet.open()
 
+    def set_current_shift(e: ft.ControlEvent):
+        config = load_config_file('config.json')
+        config['shift']['current_shift'] = e.control.data['shift_index']
+        update_config_file(config, 'config.json')
+        bottom_sheet.close()
+        change_screen("main")
+        reboot_systemd('crod_connect_bot')
+
+    def change_current_shift(e: ft.ControlEvent):
+        shift_list = load_config_file('config.json')['shift']['shift_list']
+
+        shifts_col = ft.Column()
+        for index, shift in enumerate(shift_list):
+            start_date, end_date = convert_date(shift['date']['start']), convert_date(shift['date']['end'])
+
+            shifts_col.controls.append(
+                ft.Container(
+                    ft.ListTile(
+                        title=ft.Text(shift['name'], size=18),
+                        subtitle=ft.Text(f"{start_date} - {end_date}", size=14),
+                        data={'shift_index': index},
+                        on_click=set_current_shift
+                    ),
+                )
+            )
+        bottom_sheet.content = ft.Column(
+            [
+                ft.Text(f"\nВыберите смену или поток", size=16, weight=ft.FontWeight.W_200, text_align=ft.TextAlign.CENTER),
+                shifts_col
+            ],
+            width=600,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER
+        )
+        bottom_sheet.height = 300
+        bottom_sheet.open()
+
     def change_screen(target: str):
         logging.info(f"Changing screen to: {target}")
 
@@ -822,7 +881,8 @@ def main(page: ft.Page):
             page.add(ft.Container(login_col, expand=True))
 
         elif target == "main":
-            shift_info = load_config_file('config.json')['shift']
+            shift = load_config_file('config.json')['shift']
+            current_shift_info = shift['shift_list'][shift['current_shift']]
             query = "SELECT * FROM crodconnect.admins WHERE password = %s"
             admin = make_db_request(query, (password_field.value,))
 
@@ -851,11 +911,8 @@ def main(page: ft.Page):
             )
 
             shift_info_col = ft.Column()
-            start_date = datetime.datetime.strptime(shift_info['date']['start'], '%Y-%m-%d')
-            end_date = datetime.datetime.strptime(shift_info['date']['end'], '%Y-%m-%d')
-            current_date = datetime.datetime.now()
 
-            if start_date <= current_date <= end_date:
+            if datetime.datetime.strptime(current_shift_info['date']['start'], '%Y-%m-%d') <= datetime.datetime.now() <= datetime.datetime.strptime(current_shift_info['date']['end'], '%Y-%m-%d'):
                 shift_info_col.controls = [
                     ft.Container(
                         ft.Column(
@@ -863,21 +920,21 @@ def main(page: ft.Page):
                                 ft.Container(
                                     ft.ListTile(
                                         title=ft.Text("Название смены/потока", size=14),
-                                        subtitle=ft.Text(shift_info['name'], size=16, weight=ft.FontWeight.W_400)
+                                        subtitle=ft.Text(current_shift_info['name'], size=16, weight=ft.FontWeight.W_400)
                                     ),
                                     padding=ft.padding.only(bottom=-30)
                                 ),
                                 ft.Container(
                                     ft.ListTile(
                                         title=ft.Text("Дата начала", size=14),
-                                        subtitle=ft.Text(start_date.strftime('%d.%m.%Y'), size=16, weight=ft.FontWeight.W_400)
+                                        subtitle=ft.Text(convert_date(current_shift_info['date']['start']), size=16, weight=ft.FontWeight.W_400)
                                     ),
                                     padding=ft.padding.only(bottom=-30)
                                 ),
                                 ft.Container(
                                     ft.ListTile(
                                         title=ft.Text("Дата окончания", size=14),
-                                        subtitle=ft.Text(end_date.strftime('%d.%m.%Y'), size=16, weight=ft.FontWeight.W_400)
+                                        subtitle=ft.Text(convert_date(current_shift_info['date']['end']), size=16, weight=ft.FontWeight.W_400)
                                     )
                                 )
                             ]
@@ -893,11 +950,13 @@ def main(page: ft.Page):
             shift_info_col.controls.append(
                 ft.FilledTonalButton(
                     text="Изменить",
-                    icon=ft.icons.EDIT
+                    icon=ft.icons.EDIT,
+                    on_click=change_current_shift
                 )
+
             )
 
-            shift_info = ft.Card(
+            current_shift_info = ft.Card(
                 ft.Container(
                     content=ft.Column(
                         [
@@ -919,7 +978,7 @@ def main(page: ft.Page):
                 controls=[
                     ft.Container(ft.Text(get_hello(admin['name'].split()[1]), size=25, weight=ft.FontWeight.W_600), padding=ft.padding.only(left=10)),
                     systemd_card,
-                    shift_info
+                    current_shift_info
                 ]
             )
 
@@ -1061,7 +1120,7 @@ def main(page: ft.Page):
             col = ft.Column(
                 controls=[
                     new_child.name,
-                    new_child.birth,
+                    ft.Row([new_child.birth_day, new_child.birth_month, new_child.birth_year]),
                     new_child.group,
                     new_child.caption,
                     ft.Divider(thickness=1),
@@ -1430,7 +1489,7 @@ def main(page: ft.Page):
         text="Добавить",
         icon=ft.icons.SAVE,
         disabled=True,
-        on_click=lambda _: print("OOKOK")
+        on_click=lambda _: add_new_child()
     )
 
     btn_add_mentor = ft.ElevatedButton(
@@ -1954,20 +2013,19 @@ def main(page: ft.Page):
                 expanded_cross_axis_alignment=ft.CrossAxisAlignment.START,
                 controls=[
                     ft.ListTile(
-                        title=ft.Text("Обновление списка"),
+                        title=ft.Text("Обновить список"),
                         subtitle=ft.Text("Загрузка таблицы с информацией о детях"),
                         leading=ft.Icon(ft.icons.UPLOAD_FILE),
                         data={'sec': "children", 'act': "update_table"},
                         on_click=drawer_element_selected),
                     ft.ListTile(
-                        title=ft.Text("Изменение группы"),
-                        subtitle=ft.Text("Изменение номера группы ребёнка"),
+                        title=ft.Text("Изменить группу"),
+                        subtitle=ft.Text("Перевод ребёнка в другую группу"),
                         leading=ft.Icon(ft.icons.EDIT_DOCUMENT),
                         data={'sec': "children", 'act': "edit_group_num"},
                         on_click=drawer_element_selected),
                     ft.ListTile(
                         title=ft.Text("Добавить ребёнка"),
-                        subtitle=ft.Text("Единичное добавление нового ребёнка"),
                         leading=ft.Icon(ft.icons.PERSON_ADD),
                         data={'sec': "children", 'act': "add_children"},
                         on_click=drawer_element_selected),

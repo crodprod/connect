@@ -1,9 +1,24 @@
+import datetime
 import re
 import time
 
 from flet import *
 from flet_elements.modules_locations import locations
 
+months = {
+    1: "января",
+    2: "февраля",
+    3: "марта",
+    4: "апреля",
+    5: "мая",
+    6: "июня",
+    7: "июля",
+    8: "августа",
+    9: "сентября",
+    10: "октября",
+    11: "ноября",
+    12: "декабря",
+}
 
 class NewModule:
     def __init__(self, page: Page, save_btn):
@@ -122,11 +137,28 @@ class NewChild:
             hint_text="Иванов Иван Иванович",
             on_change=lambda _: self.validate()
         )
-        self.birth = TextField(
-            label="Дата рождения",
-            prefix_icon=icons.CALENDAR_MONTH,
-            hint_text="10.10.2010",
-            on_change=lambda _: self.validate()
+        self.birth_day = TextField(
+            label="День",
+            # prefix_icon=icons.CALENDAR_MONTH,
+            # hint_text="10.10.2010",
+            on_change=lambda _: self.validate(),
+            width=100
+        )
+        self.birth_month = Dropdown(
+            label="Месяц",
+            # prefix_icon=icons.CALENDAR_MONTH,
+            # hint_text="10.10.2010",
+            options=[dropdown.Option(text=months[i], key=i) for i in months.keys()],
+            on_change=lambda _: self.validate(),
+            width=110
+        )
+        self.birth_year = Dropdown(
+            label="Год",
+            # prefix_icon=icons.CALENDAR_MONTH,
+            # hint_text="10.10.2010",
+            options=[dropdown.Option(text=str(i), key=str(i)) for i in range(datetime.datetime.now().year - 18, datetime.datetime.now().year)],
+            on_change=lambda _: self.validate(),
+            width=110
         )
         self.caption = TextField(
             label="Особенности",
@@ -158,7 +190,7 @@ class NewChild:
         if all([
             len(self.name.value.strip().split(" ")) in [2, 3],
             len(self.parent_name.value.strip().split(" ")) in [2, 3]
-        ]) and self.group.value != "" and self.phone.value.isnumeric() and len(self.phone.value) == 10 and re.match(r'^(0[1-9]|[12][0-9]|3[01])\.(0[1-9]|1[0-2])\.(19|20)\d{2}$', self.birth.value):
+        ]) and self.group.value != "" and self.phone.value.isnumeric() and len(self.phone.value) == 10 and all([self.birth_day.value, self.birth_month.value, self.birth_year.value]):
             self.btn.disabled = False
         else:
             self.btn.disabled = True
@@ -171,7 +203,6 @@ class NewChild:
         self.parent_name.value = ""
         self.phone.value = ""
         self.caption.value = ""
-        self.birth.value = ""
         self.btn.disabled = True
 
         self.page.update()
@@ -237,7 +268,6 @@ class ConfirmationCodeField:
             self.password_row.controls[i].value = None
         self.password_row.controls[0].focus()
         self.page.update()
-
 
     def create(self, target):
         target.controls.append(Container(self.password_row))

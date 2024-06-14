@@ -16,6 +16,8 @@ from re import sub
 from transliterate import translit
 from PIL import Image, ImageDraw, ImageFont
 
+from app import convert_date
+
 basicConfig(
     level=INFO,
     format="%(asctime)s %(levelname)s %(message)s"
@@ -97,6 +99,7 @@ def get_grouplist(group_list: list, group_num: int):
 
     data = []
     for child in group_list:
+        child['birth'] = convert_date(str(child['birth']))
         data.append(
             [
                 child['name'],
