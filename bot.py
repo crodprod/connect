@@ -1057,7 +1057,6 @@ async def start_feedback():
 
 
 async def check_for_start_module():
-    logging.info('Schedule: check for module record open')
     config = load_config_file('config.json')
 
     if config['module_record'] and not statuses['modules_record']:
