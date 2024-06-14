@@ -919,7 +919,7 @@ def main(page: ft.Page):
                             [
                                 ft.Container(
                                     ft.ListTile(
-                                        title=ft.Text("Название смены/потока", size=14),
+                                        title=ft.Text("Текущая смена/поток", size=14),
                                         subtitle=ft.Text(current_shift_info['name'], size=16, weight=ft.FontWeight.W_400)
                                     ),
                                     padding=ft.padding.only(bottom=-30)
@@ -945,6 +945,33 @@ def main(page: ft.Page):
             else:
                 shift_info_col.controls = [
                     ft.Text("Активная смена или поток отсутствует", size=16),
+                    ft.Container(
+                        ft.Column(
+                            [
+                                ft.Container(
+                                    ft.ListTile(
+                                        title=ft.Text("Предстоящая смена/поток", size=14),
+                                        subtitle=ft.Text(current_shift_info['name'], size=16, weight=ft.FontWeight.W_400)
+                                    ),
+                                    padding=ft.padding.only(bottom=-30)
+                                ),
+                                ft.Container(
+                                    ft.ListTile(
+                                        title=ft.Text("Дата начала", size=14),
+                                        subtitle=ft.Text(convert_date(current_shift_info['date']['start']), size=16, weight=ft.FontWeight.W_400)
+                                    ),
+                                    padding=ft.padding.only(bottom=-30)
+                                ),
+                                ft.Container(
+                                    ft.ListTile(
+                                        title=ft.Text("Дата окончания", size=14),
+                                        subtitle=ft.Text(convert_date(current_shift_info['date']['end']), size=16, weight=ft.FontWeight.W_400)
+                                    )
+                                )
+                            ]
+                        ),
+                        padding=ft.padding.only(left=-15)
+                    )
                 ]
 
             shift_info_col.controls.append(
