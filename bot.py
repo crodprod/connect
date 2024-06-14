@@ -1152,8 +1152,8 @@ async def main():
     if platform.system() != "Windows":
         await bot.send_message(
             chat_id=os.getenv('ID_GROUP_ERRORS'),
-            text="<b>Перезагрузка сервисов</b>"
-                 "\n\nТелеграмм-бот перезагружен!"
+            text="<b>Перезагрузка</b>"
+                 "\n\nTelegram-бот перезагружен!"
         )
 
     await bot(DeleteWebhook(drop_pending_updates=True))

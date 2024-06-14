@@ -571,7 +571,7 @@ def main(page: ft.Page):
                 if send_telegram_document(
                         tID=response['telegram_id'],
                         filepath=merged_filepath,
-                        description=caption
+                        description=caption + "\n\n#документы"
                 ):
                     open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
                     remove_folder_content(f"{current_directory}/wording/generated")
@@ -627,7 +627,7 @@ def main(page: ft.Page):
                 if send_telegram_document(
                         tID=response['telegram_id'],
                         filepath=merged_filepath,
-                        description=caption
+                        description=caption + "\n\n#документы"
                 ):
                     open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
                 else:
@@ -683,7 +683,7 @@ def main(page: ft.Page):
                             if send_telegram_document(
                                     tID=response['telegram_id'],
                                     filepath=merged_filepath,
-                                    description=caption
+                                    description=caption + "\n\n#документы"
                             ):
                                 open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
                             else:
@@ -714,7 +714,7 @@ def main(page: ft.Page):
                     if send_telegram_document(
                             tID=response['telegram_id'],
                             filepath=filepath,
-                            description=caption
+                            description=caption + "\n\n#документы"
                     ):
                         open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
                     else:
@@ -751,7 +751,7 @@ def main(page: ft.Page):
                     if send_telegram_document(
                             tID=response['telegram_id'],
                             filepath=filepath,
-                            description=caption
+                            description=caption + "\n\n#документы"
                     ):
                         open_sb("Документ отправлен в Telegram", ft.colors.GREEN)
                     else:
