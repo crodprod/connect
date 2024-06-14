@@ -869,7 +869,7 @@ async def callbacks_children(callback: types.CallbackQuery, callback_data: Recor
         UPDATE crodconnect.modules SET seats_real = seats_real + 1 WHERE id = %s;
     """
 
-    make_db_request(query, (callback_data.child_id, callback_data.module_id, callback_data.module_id, ))
+    make_db_request(query, (callback_data.child_id, callback_data.module_id, callback_data.module_id,))
     if db.result['status'] == 'ok':
         await recording_to_module_process(callback_data.child_id, callback)
     else:
@@ -1056,6 +1056,32 @@ async def start_feedback():
             await raise_error(db.result['message'])
 
 
+async def check_for_start_module():
+    logging.info('Schedule: check for module record open')
+    config = load_config_file('config.json')
+
+    if config['module_record'] and not statuses['modules_record']:
+        logging.info('Schedule: openning modules record')
+        statuses['modules_record'] = True
+
+        await bot.send_message(
+            chat_id=os.getenv('ID_GROUP_ERRORS'),
+            text="<b>Образовательные модули</b>\n\n" + "✅ Запись на образовательные модули открыта",
+        )
+
+    elif not config['module_record'] and statuses['modules_record']:
+        logging.info('Schedule: closing modules record')
+        statuses['modules_record'] = False
+
+        await bot.send_message(
+            chat_id=os.getenv('ID_GROUP_ERRORS'),
+            text="<b>Образовательные модули</b>\n\n" + "⛔ Запись на образовательные модули закрыта",
+        )
+
+    elif config['module_record'] and statuses['modules_record']:
+        pass
+
+
 async def check_for_date():
     logging.info("Check for shift end")
     shift = load_config_file('config.json')['shift']
@@ -1159,6 +1185,12 @@ async def main():
         day_of_week="mon-sun",
         hour=0,
         minute=0
+    )
+    scheduler.add_job(
+        check_for_start_module,
+        "cron",
+        day_of_week="mon-sun",
+        minute='*'
     )
     scheduler.print_jobs()
     scheduler.start()

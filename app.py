@@ -806,12 +806,31 @@ def main(page: ft.Page):
         target = e.control.data['target']
 
         if target == 'modules_info':
+            module_record_open = load_config_file('config.json')['module_record']
+            print(module_record_open)
+            if module_record_open:
+                module_record_tile = ft.ListTile(
+                    title=ft.Text('Закрыть запись'),
+                    subtitle=ft.Text('Закрытие записи на образовательные модули'),
+                    leading=ft.Icon(ft.icons.BOOK, color=ft.colors.RED),
+                    on_click=lambda _: open_confirmation("stop_modules")
+                )
+            else:
+                module_record_tile = ft.ListTile(
+                    title=ft.Text('Открыть запись'),
+                    subtitle=ft.Text('Открытие записи на образовательные модули'),
+                    leading=ft.Icon(ft.icons.BOOK, color=ft.colors.AMBER),
+                    on_click=lambda _: open_confirmation("start_modules")
+                )
+
             controls = [
                 ft.ListTile(
                     title=ft.Text('Создать модуль'),
                     leading=ft.Icon(ft.icons.CREATE_NEW_FOLDER, color=ft.colors.GREEN),
                     on_click=lambda _: change_screen("create_module")
                 ),
+                module_record_tile,
+                ft.Divider(thickness=1),
                 ft.ListTile(
                     title=ft.Text('Удалить модули'),
                     subtitle=ft.Text('Полное удаление информации о текущих модулях'),
@@ -1634,6 +1653,28 @@ def main(page: ft.Page):
         elif action == "edit_stream":
             change_screen("edit_env")
 
+        elif action == "start_modules":
+            dlg_info.title = "Учебные модули"
+            dlg_info.content = ft.Text(
+                "Запись на учебные модули откроется в течение 1 минуты.",
+                width=600, size=16, weight=ft.FontWeight.W_200
+            )
+            dlg_info.open()
+            config = load_config_file('config.json')
+            config['module_record'] = True
+            update_config_file(config, 'config.json')
+
+        elif action == "stop_modules":
+            dlg_info.title = "Учебные модули"
+            dlg_info.content = ft.Text(
+                "Запись на учебные модули закроется в течение 1 минуты.",
+                width=600, size=16, weight=ft.FontWeight.W_200
+            )
+            dlg_info.open()
+            config = load_config_file('config.json')
+            config['module_record'] = False
+            update_config_file(config, 'config.json')
+
         elif action == "remove_modules":
             mysql_backup()
             dlg_loading.loading_text = "Удаляем модули"
@@ -1710,6 +1751,13 @@ def main(page: ft.Page):
             },
             'admin_show_qrlist': {
                 'title': "QR-коды"
+            },
+            'start_modules': {
+                'title': "Открытие записи на модули"
+            }
+            ,
+            'stop_modules': {
+                'title': "Закрытие записи на модули"
             }
         }
 
