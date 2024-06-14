@@ -188,6 +188,7 @@ class NewChild:
         )
 
     def validate(self):
+        print(self.birth_day.value)
         if all([
             len(self.name.value.strip().split(" ")) in [2, 3],
             len(self.parent_name.value.strip().split(" ")) in [2, 3]

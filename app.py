@@ -501,7 +501,7 @@ def main(page: ft.Page):
                 send_telegam_message(
                     tID=mentor['telegram_id'],
                     message_text=f"{' '.join(mentor['name'].split()[1:])}, в вашу группу переведен(-а) *{child['name']}*"
-                                 f"\n\n*Дата рождения:* {child['birth']}"
+                                 f"\n\n*Дата рождения:* {convert_date(str(child['birth']))}"
                                  f"\n*Особенности:* {child['comment']}"
                                  f"\n*Родитель:* {child['parrent_name']} ({child['parrent_phone']})"
                 )
