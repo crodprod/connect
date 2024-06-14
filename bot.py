@@ -245,7 +245,7 @@ async def send_hello(telegram_id: int, table: str):
                 other_mentors = ""
                 query = "SELECT * FROM crodconnect.mentors WHERE group_num = %s and status = 'active'"
                 mentors_info = make_db_request(query, (user_info['group_num'],))
-                if type(mentors_info) == dict: mentors_info = [mentors_info]
+                mentors_info = dict_to_list(mentors_info)
                 if db.result['status'] == 'ok':
                     for mentor in mentors_info:
                         if mentor['telegram_id'] != telegram_id:
@@ -509,7 +509,7 @@ async def callbacks_mentors(callback: types.CallbackQuery, callback_data: Mentor
                 if user_info is not None:
                     if action == "grouplist":
                         await callback.message.delete()
-                        query = "SELECT * FROM crodconnect.children where group_num = %s and status = 'active'"
+                        query = "SELECT * FROM crodconnect.children where group_num = %s"
 
                         group_list = make_db_request(query, (user_info['group_num'],))
                         if db.result['status'] == 'ok':
@@ -1084,6 +1084,7 @@ async def stop_feedback():
         query = "SELECT * FROM crodconnect.teachers WHERE status = 'active'"
 
         teachers_list = make_db_request(query)
+        teachers_list = dict_to_list(teachers_list)
         if db.result['status'] == 'ok':
             teachers_list = dict_to_list(teachers_list)
             for teacher in teachers_list:
