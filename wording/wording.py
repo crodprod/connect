@@ -82,11 +82,11 @@ def fill_badge(badge_type: str, name: str, caption: str):
 
     position_caption = (543.5, 550)
 
-    name_1, name_2, name_3 = (a for a in name.split())
-
-    drawer.text((543.5, 220), name_1.upper(), font=name_font, fill='black', anchor='mm')
-    drawer.text((543.5, 310), name_2.upper(), font=name_font, fill='black', anchor='mm')
-    drawer.text((543.5, 400), name_3.upper(), font=name_font, fill='black', anchor='mm')
+    name = name.split()
+    start_y = 220
+    for n in name:
+        drawer.text((543.5, start_y), n.upper(), font=name_font, fill='black', anchor='mm')
+        start_y += 90
     drawer.text(position_caption, caption.upper(), font=caption_font, fill='black', anchor='mm')
 
     badge.save(f"{current_directory}/generated/{filename}.png")
