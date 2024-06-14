@@ -141,7 +141,7 @@ class NewChild:
             label="День",
             # prefix_icon=icons.CALENDAR_MONTH,
             # hint_text="10.10.2010",
-            options=[dropdown.Option(text=str(i), key='0'*(2-len(str(i)))) for i in range(1, 32)],
+            options=[dropdown.Option(text=str(i), key='0'*(2-len(str(i))) + str(i)) for i in range(1, 32)],
             on_change=lambda _: self.validate(),
             width=100
         )
