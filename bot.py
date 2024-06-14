@@ -1048,7 +1048,8 @@ async def start_feedback():
 
 async def check_for_date():
     logging.info("Check for shift end")
-    dates = load_config_file('config.json')['shift']['date']
+    shift = load_config_file('config.json')['shift']
+    dates = shift['shift_list'][shift['current_shift']]['date']
     if not (datetime.datetime.strptime(dates['start'], '%Y-%m-%d') <= datetime.datetime.now() <= datetime.datetime.strptime(dates['end'], '%Y-%m-%d')):
         logging.info("Shift ended, responding to actions stopped")
         statuses['can_respond'] = False
