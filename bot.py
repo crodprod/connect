@@ -245,6 +245,7 @@ async def send_hello(telegram_id: int, table: str):
                 other_mentors = ""
                 query = "SELECT * FROM crodconnect.mentors WHERE group_num = %s and status = 'active'"
                 mentors_info = make_db_request(query, (user_info['group_num'],))
+                if type(mentors_info) == dict: mentors_info = [mentors_info]
                 if db.result['status'] == 'ok':
                     for mentor in mentors_info:
                         if mentor['telegram_id'] != telegram_id:
