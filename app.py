@@ -2179,8 +2179,6 @@ def main(page: ft.Page):
     def get_showqr(target: str, value: str = None, admin: bool = False):
         page.scroll = ft.ScrollMode.HIDDEN
         page.appbar.visible = admin
-        # dlg_loading.loading_text = "Загрузка"
-        # dlg_loading.open()
 
         titles = {
             'admins': "Администрация",
