@@ -18,7 +18,7 @@ load_dotenv(dotenv_path=env_path)
 @app.route('/addticket', methods=['POST'])
 def add_ticket():
     ticket_data = request.json['params']
-    # print(ticket_data)
+    print('1111111', ticket_data)
 
     ticket_data['caption'] = 'отсутствует' if not ticket_data['caption'] else ticket_data['caption']
     ticket_data['file'] = 'отсутствует' if not ticket_data['file'] else f"[открыть]({ticket_data['file']})"
