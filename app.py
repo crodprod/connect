@@ -29,7 +29,7 @@ from flet_elements.classes import NewModule, NewAdmin, NewMentor, NewChild, Conf
 from flet_elements.dialogs import InfoDialog, LoadingDialog, BottomSheet
 from flet_elements.functions import remove_folder_content, get_hello, get_system_list
 from flet_elements.screens import screens
-from flet_elements.systemd import reboot_systemd, check_systemd
+from flet_elements.systemd import reboot_systemd, check_systemd, services_list
 from flet_elements.telegram import send_telegam_message, send_telegram_document, delete_telegram_message
 from flet_elements.functions import is_debug
 from flet_elements.user_statuses import user_statuses
@@ -1479,50 +1479,20 @@ def main(page: ft.Page):
                     ft.Row(
                         [ft.Icon(ft.icons.CIRCLE, color=ft.colors.GREEN), ft.Text("доступно"), ft.Icon(ft.icons.CIRCLE, color=ft.colors.RED), ft.Text("требуется перезагрузка")],
                         alignment=ft.MainAxisAlignment.CENTER
-                    ),
-                    get_reboot_card(
-                        title="Бот",
-                        icon=ft.icons.TELEGRAM,
-                        target="crod_connect_bot"
-                    ),
-                    get_reboot_card(
-                        title="Коннект",
-                        icon=ft.icons.CONNECT_WITHOUT_CONTACT,
-                        target="crod_connect"
-                    ),
-                    get_reboot_card(
-                        title="Audio (приложение)",
-                        icon=ft.icons.SPATIAL_AUDIO,
-                        target="crod_audio_app"
-                    ),
-                    get_reboot_card(
-                        title="Audio (веб-сокет)",
-                        icon=ft.icons.SPATIAL_AUDIO,
-                        target="crod_audio_server"
-                    ),
-                    get_reboot_card(
-                        title="Audio (ngrok)",
-                        icon=ft.icons.SPATIAL_AUDIO,
-                        target="crod_ws_ngrok"
-                    ),
-                    get_reboot_card(
-                        title="Эфир",
-                        icon=ft.icons.ADD_TASK,
-                        target="crod_stream"
-                    ),
-                    get_reboot_card(
-                        title="Таскер",
-                        icon=ft.icons.ADD_TASK,
-                        target="crod_tasker"
-                    ),
-                    get_reboot_card(
-                        title="Стартовая страница",
-                        icon=ft.icons.ADD_TASK,
-                        target="crod_mainpage"
                     )
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER
             )
+
+            for service in services_list:
+                col.controls.append(
+                    get_reboot_card(
+                        title=service['title'],
+                        icon=ft.icons.ADD_TASK,
+                        target=service['service']
+                    )
+                )
+
             page.add(col)
             dlg_loading.close()
 
@@ -2364,7 +2334,7 @@ def main(page: ft.Page):
         page.window_width = 377
         page.window_height = 768
         page.route = "/"
-        page.route = "/modulecheck?mentor_id=38&initiator=409801981&signature=44f3aea7222504df1de105e07610ffd07b43a0aa7e2f7af555d233d47691e799"
+        # page.route = "/modulecheck?mentor_id=38&initiator=409801981&signature=44f3aea7222504df1de105e07610ffd07b43a0aa7e2f7af555d233d47691e799"
         # page.route = "/showqr/mentor?target=children&value=3&initiator=409801981&signature=654962104fc3627e1bae115b3bb54255cd9338021de9d03cb7c5db5c858bf055"
         # page.route = "/showqr/admin?initiator=409801981"
 

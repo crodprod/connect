@@ -4,13 +4,42 @@ from subprocess import Popen, PIPE
 systemctl_path = "/usr/bin/systemctl"
 
 services_list = [
-    'crod_connect_bot',
-    'crod_connect',
-    'crod_audio_app',
-    'crod_audio_server',
-    'crod_ws_ngrok',
-    'crod_tasker',
-    'crod_mainpage',
+    {
+        'title': "Бот",
+        'service': "crod_connect_bot"
+    },
+    {
+        'title': "Коннект",
+        'service': "crod_connect"
+    },
+    {
+        'title': "Audio (приложение)",
+        'service': "crod_audio_app"
+    },
+    {
+        'title': "Audio (веб-сокет)",
+        'service': "crod_audio_server"
+    },
+    {
+        'title': "Audio (ngrok)",
+        'service': "crod_ws_ngrok"
+    },
+    {
+        'title': "Эфир",
+        'service': "crod_stream"
+    },
+    {
+        'title': "Таскер",
+        'service': "crod_tasker"
+    },
+    {
+        'title': "Стартовая страница",
+        'service': "crod_mainpage"
+    },
+    {
+        'title': "Flask",
+        'service': "flask"
+    }
 ]
 
 
