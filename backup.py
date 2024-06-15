@@ -1,4 +1,7 @@
 import platform
+
+from dotenv import load_dotenv
+
 import yadiskapi
 import logging
 import subprocess
@@ -15,7 +18,7 @@ def mysql_backup():
         filepath = f"/root/crod/backups/{filename}"
         logging.info(f'Backup: creating {filename}')
 
-        command = f"/usr/bin/mysqldump -h 127.0.0.1 -P {3310} -u {os.getenv('DB_USER')} -p{os.getenv('DB_PASSWORD')} crodconnect > {filepath}"
+        command = f"/usr/bin/mysqldump -h 127.0.0.1 -P {os.getenv('DB_PORT')} -u {os.getenv('DB_USER')} -p{os.getenv('DB_PASSWORD')} crodconnect > {filepath}"
 
         text = f"*Статус:* ✅ создан" \
                f"\n*Файл:* {filename}"
