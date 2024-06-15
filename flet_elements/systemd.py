@@ -88,11 +88,14 @@ def make_update(service_name):
     service = get_service_info(service_name)
     source = "/root/crod" + service['folder']
 
-    command = f"cd {source}" \
-              f"/usr/bin/git pull origin main" \
-              f"source venv/bin/activate" \
-              f"pip3 install -r requirements.txt" \
-              f"/usr/bin/systemctl restart {service_name}.service"
+    command = (
+        f"cd {source} && "
+        f"/usr/bin/git pull origin main && "
+        f"source venv/bin/activate && "
+        f"pip3 install -r requirements.txt && "
+        f"/usr/bin/systemctl restart {service_name}.service"
+    )
+
     try:
         run(command, shell=True)
         return {'status': 'ok', 'msg': f'Запрос на обновление сервиса {service_name} выполнен успешно.'}
