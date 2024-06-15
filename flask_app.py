@@ -31,7 +31,7 @@ def add_ticket():
 
     ticket_data['caption'] = 'отсутствует' if not ticket_data['caption'] else ticket_data['caption']
     ticket_data['file'] = 'отсутствует' if not ticket_data['file'] else f"[открыть]({ticket_data['file']})"
-    user_tid = ticket_data['ticket_id'].split('-')[0]
+    user_tid = ticket_data['ticket_id'].split('-')[0] if len(ticket_data['ticket_id'].split('-')) == 2 else '0'
 
     db.connect()
     query = """
