@@ -35,13 +35,13 @@ def add_ticket():
 
     db.connect()
     query = """
-            SELECT 'children' AS post_, name, status FROM crodconnect.children WHERE telegram_id = %s
+            SELECT 'ребёнок' AS post_, name, status FROM crodconnect.children WHERE telegram_id = %s
             UNION
-            SELECT 'teachers' AS post_, name, status FROM crodconnect.teachers WHERE telegram_id = %s
+            SELECT 'преподаватель' AS post_, name, status FROM crodconnect.teachers WHERE telegram_id = %s
             UNION
-            SELECT 'mentors' AS post_, name, status FROM crodconnect.mentors WHERE telegram_id = %s
+            SELECT 'воспитатель' AS post_, name, status FROM crodconnect.mentors WHERE telegram_id = %s
             UNION 
-            SELECT 'admins' AS post_, name, status FROM crodconnect.admins WHERE telegram_id = %s;
+            SELECT 'администратор' AS post_, name, status FROM crodconnect.admins WHERE telegram_id = %s;
                 """
 
     if db.result['status'] == 'ok':
