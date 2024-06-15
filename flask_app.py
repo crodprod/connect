@@ -31,44 +31,45 @@ def add_ticket():
 
     ticket_data['caption'] = 'отсутствует' if not ticket_data['caption'] else ticket_data['caption']
     ticket_data['file'] = 'отсутствует' if not ticket_data['file'] else f"[открыть]({ticket_data['file']})"
-    user_tid = ticket_data['ticket_id'].split('-')[0] if len(ticket_data['ticket_id'].split('-')) == 2 else '0'
+    if len(ticket_data['ticket_id'].split('-')) == 2:
+        user_tid = ticket_data['ticket_id'].split('-')[0]
 
-    db.connect()
-    query = """
-            SELECT 'ребёнок' AS post_, name, status FROM crodconnect.children WHERE telegram_id = %s
-            UNION
-            SELECT 'преподаватель' AS post_, name, status FROM crodconnect.teachers WHERE telegram_id = %s
-            UNION
-            SELECT 'воспитатель' AS post_, name, status FROM crodconnect.mentors WHERE telegram_id = %s
-            UNION 
-            SELECT 'администратор' AS post_, name, status FROM crodconnect.admins WHERE telegram_id = %s;
-                """
-
-    if db.result['status'] == 'ok':
-        db.execute(query, (user_tid, user_tid, user_tid, user_tid,))
-        db.disconnect()
+        db.connect()
+        query = """
+                SELECT 'ребёнок' AS post_, name, status FROM crodconnect.children WHERE telegram_id = %s
+                UNION
+                SELECT 'преподаватель' AS post_, name, status FROM crodconnect.teachers WHERE telegram_id = %s
+                UNION
+                SELECT 'воспитатель' AS post_, name, status FROM crodconnect.mentors WHERE telegram_id = %s
+                UNION 
+                SELECT 'администратор' AS post_, name, status FROM crodconnect.admins WHERE telegram_id = %s;
+                    """
 
         if db.result['status'] == 'ok':
-            response = db.data
-            if not response:
-                user = "Информация в системе отсутствует"
+            db.execute(query, (user_tid, user_tid, user_tid, user_tid,))
+            db.disconnect()
+
+            if db.result['status'] == 'ok':
+                response = db.data
+                if not response:
+                    user = "Информация в системе отсутствует"
+                else:
+                    user = f"{response['name']}\nРоль: {response['post_']}\nСтатус: {response['status']}"
             else:
-                user = f"{response['name']}\nРоль: {response['post_']}\nСтатус: {response['status']}"
+                user = "Не удалось получить информацию о пользователе"
         else:
             user = "Не удалось получить информацию о пользователе"
-    else:
-        user = "Не удалось получить информацию о пользователе"
 
-    send_telegam_message(
-        tID=os.getenv('ID_GROUP_ERRORS'),
-        message_text=f"📨 *Обращение от пользователя №{ticket_data['ticket_id']}*"
-                     f"\n\n🙋‍♂️ *Пользователь:* \n{user}"
-                     f"\n\n⚠️ *Проблема:* {ticket_data['topic']}"
-                     f"\n📃 *Описание:* {ticket_data['caption']}"
-                     f"\n📂 *Файл:* {ticket_data['file']}"
-
-                     f"\n\n[Открыть ответ]({ticket_data['answer_link']})"
-    )
+        send_telegam_message(
+            tID=os.getenv('ID_GROUP_ERRORS'),
+            message_text=f"📨 *Обращение от пользователя №{ticket_data['ticket_id']}*"
+                         f"\n\n🙋‍♂️ *Пользователь:* \n{user}"
+                         f"\n\n⚠️ *Проблема:* {ticket_data['topic']}"
+                         f"\n📃 *Описание:* {ticket_data['caption']}"
+                         f"\n📂 *Файл:* {ticket_data['file']}"
+    
+                         f"\n\n[Открыть ответ]({ticket_data['answer_link']})"
+        )
 
     return jsonify({
         'status': 'success',
