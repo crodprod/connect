@@ -1980,7 +1980,7 @@ def main(page: ft.Page):
                                 width=600, size=16, weight=ft.FontWeight.W_200, text_align=ft.TextAlign.CENTER
                             ),
                             ft.FilledButton(
-                                text="Зарегистрироваться", icon=ft.icons.TELEGRAM, url=f"https://t.me/{os.getenv('BOT_NAME')}?start={admin_info['pass_phrase']}",
+                                text="Зарегистрироваться", icon=ft.icons.TELEGRAM, url=f"https://t.me/{os.getenv('BOT_NAME')}?start=admins_{admin_info['pass_phrase']}",
                                 on_click=lambda _: bottom_sheet.close(), style=ft.ButtonStyle(bgcolor="#2aabee", color=ft.colors.WHITE)
                             )
                         ],

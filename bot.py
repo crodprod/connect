@@ -342,6 +342,7 @@ async def get_module_feedback_today(module_id: int):
 
 @dp.message(CommandStart(deep_link=True, magic=F.args.regexp(re.compile(r'(children|mentors|teachers|admins|tasker)_\w+'))))
 async def deep_linking(message: Message, command: CommandObject):
+    logging.info(f'Deeplink: {command.args}')
     telegram_id = message.from_user.id
     target = command.args.split("_")[0]
     pass_phrase = command.args.split("_")[1]
