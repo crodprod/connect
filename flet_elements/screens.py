@@ -149,6 +149,30 @@ screens = {
         },
         'scroll_mode': base_scroll_mode
     },
+    'module_check': {
+        'appbar': {
+            'visible': True,
+            'leading': {
+                'icon': back_icon,
+                'action': "change_screen",
+                'target': 'module_check_start'
+            },
+            'title': "Посещаемость"
+        },
+        'scroll_mode': base_scroll_mode
+    },
+    'module_check_start': {
+        'appbar': {
+            'visible': True,
+            'leading': {
+                'icon': icons.PEOPLE,
+                'action': None,
+                'target': None
+            },
+            'title': "Посещаемость"
+        },
+        'scroll_mode': base_scroll_mode
+    },
     'app_info': {
         'appbar': {
             'visible': True,

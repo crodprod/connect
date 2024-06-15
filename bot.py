@@ -599,11 +599,10 @@ async def callbacks_mentors(callback: types.CallbackQuery, callback_data: Mentor
                         )
                     elif action == "traffic":
                         await callback.message.delete()
-                        module_id = 1
-                        url = f"{base_crod_url}/connect/modulecheck?mentor_id={user_info['id']}&module_id={module_id}&initiator={callback.from_user.id}"
+                        url = f"{base_crod_url}/connect/modulecheck?mentor_id={user_info['id']}&initiator={callback.from_user.id}"
 
                         signature, signed_url = create_signed_url(url, SECRET_KEY)
-                        set_redis_hash(signature, f"modulecheck_{callback.from_user.id}_{user_info['id']}_{module_id}")
+                        set_redis_hash(signature, f"modulecheck_{callback.from_user.id}_{user_info['id']}")
 
                         btn = keyboard.InlineKeyboardBuilder().button(
                             text="Посещаемость",

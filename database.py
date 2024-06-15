@@ -44,7 +44,7 @@ class MySQL:
             error(f'MySQL: Not connected to database: {e}')
 
     def execute(self, query: str, params: tuple = ()):
-        info(f'MySQL: Executing {query} with params {params}')
+        info(f'MySQL: Executing: {query} with params {params}')
         try:
             self.cur.execute(
                 operation=query,

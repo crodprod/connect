@@ -876,6 +876,30 @@ def main(page: ft.Page):
         bottom_sheet.height = 500
         bottom_sheet.open()
 
+    def show_module_info(e: ft.ControlEvent):
+        data = e.control.data
+        module, teacher = data['module'], data['teacher']
+
+        bottom_sheet.height = 200
+        bottom_sheet.content = ft.Column(
+            [
+                ft.Text("Информация о модуле", size=16, weight=ft.FontWeight.W_200),
+                ft.ListTile(
+                    title=ft.Text(module['name'], size=16),
+                    subtitle=ft.Text(teacher['name'], size=14),
+                    leading=ft.Icon(ft.icons.ARTICLE)
+                ),
+                ft.ListTile(
+                    title=ft.Text(module['location'], size=16),
+                    subtitle=ft.Text(f"Занято {module['seats_real']} из {module['seats_max']} мест", size=14),
+                    leading=ft.Icon(ft.icons.LOCATION_ON)
+                )
+            ],
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            width=600
+        )
+        bottom_sheet.open()
+
     def set_current_shift(e: ft.ControlEvent):
         config = load_config_file('config.json')
         config['shift']['current_shift'] = e.control.data['shift_index']
@@ -935,6 +959,9 @@ def main(page: ft.Page):
                     icon=leading_icon,
                     on_click=open_menu_drawer
                 )
+            elif action is None:
+                page.appbar.leading = ft.Icon(leading_icon)
+
             page.appbar.title.value = screens[target]['appbar']['title']
 
         if target == "login":
@@ -1494,6 +1521,118 @@ def main(page: ft.Page):
             page.add(col)
             dlg_loading.close()
 
+        elif target == "module_check":
+            dlg_loading.loading_text = "Загрузка"
+            dlg_loading.open()
+            time.sleep(0.5)
+
+            module_check_info = page.session.get('modulecheck_info')
+            module = module_check_info['module']
+
+            query = "SELECT * FROM crodconnect.teachers WHERE module_id = %s LIMIT 1"
+            teacher_info = make_db_request(query, (module['id'],))
+            if db.result['status'] == 'ok':
+                page.appbar.actions = [
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.IconButton(
+                                    ft.icons.INFO_OUTLINED,
+                                    data={'module': module, 'teacher': teacher_info},
+                                    on_click=show_module_info
+                                )
+                            ]
+                        ),
+                        padding=ft.padding.only(right=10)
+                    )
+                ]
+
+            query = "SELECT * FROM crodconnect.children WHERE id IN (SELECT child_id FROM crodconnect.modules_records WHERE module_id = %s)"
+
+            children_list = make_db_request(query, (module['id'],))
+            if db.result['status'] == 'ok':
+                if type(children_list) == dict: children_list = [children_list]
+
+                if len(children_list) > 0:
+                    page.controls.clear()
+                    module_traffic_col.controls.clear()
+
+                    for child in children_list:
+                        remaining_children_traffic.append(child)
+                        module_traffic_col.controls.append(
+                            ft.Row(
+                                [
+                                    ft.Container(ft.Text(child['name'], size=16, weight=ft.FontWeight.W_200, width=300), expand=True),
+                                    ft.Checkbox(data=child, on_change=modulecheck_checkbox_changed)
+                                ]
+                            )
+                        )
+
+                    module_traffic_col.controls.append(
+                        ft.Row(
+                            [
+                                ft.FilledButton(text="Сохранить", icon=ft.icons.SAVE, on_click=lambda _: update_modulecheck())
+                            ],
+                            alignment=ft.MainAxisAlignment.END
+                        )
+                    )
+
+                    page.add(module_traffic_col)
+
+                else:
+                    change_screen("module_check_start")
+                    dlg_info.title = "Посещаемость"
+                    dlg_info.content = ft.Text(f"На модуль «{module['name']}» пока никто не записан.", size=16, weight=ft.FontWeight.W_200)
+                    dlg_info.open()
+
+            dlg_loading.close()
+
+        elif target == "module_check_start":
+            dlg_loading.loading_text = "Загрузка"
+            dlg_loading.open()
+            time.sleep(0.5)
+
+            query = "SELECT * FROM crodconnect.modules WHERE status = 'active'"
+            modules_list = make_db_request(query)
+            if db.result['status'] == 'ok':
+                if type(modules_list) == dict: modules_list = [modules_list]
+
+                if len(modules_list) > 0:
+                    modules_col = ft.Column(
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        width=600
+                    )
+
+                    for module in modules_list:
+                        modules_col.controls.append(
+                            ft.Container(
+                                ft.Row(
+                                    [
+                                        ft.Container(
+                                            content=ft.ListTile(
+                                                title=ft.Text(module['name']),
+                                                subtitle=ft.Text(module['location']),
+                                            ),
+                                            expand=True
+                                        ),
+                                        ft.Container(ft.Icon(ft.icons.ARROW_FORWARD_IOS), padding=ft.padding.only(right=15))
+                                    ]
+                                ),
+                                data={'module': module},
+                                on_click=goto_modulecheck
+                            )
+
+                        )
+
+                    page.add(modules_col)
+
+                else:
+                    dlg_info.title = "Посещаемость"
+                    dlg_info.content = ft.Text("Не найдено активных образовательных модулей.", size=16, weight=ft.FontWeight.W_200)
+                    dlg_info.open()
+
+            dlg_loading.close()
+
         elif target == "select_qr_group":
             col = ft.Column(
                 controls=[
@@ -1613,12 +1752,6 @@ def main(page: ft.Page):
     new_mentor = NewMentor(page=page, save_btn=btn_add_mentor)
     new_child = NewChild(page=page, save_btn=btn_add_child)
     extra_users = ExtraUsers(page=page)
-
-    child_to_change_group = ft.TextField(
-        label="ФИО ребёнка",
-        prefix_icon=ft.icons.CHILD_CARE,
-        hint_text="Иванов Иван Иванович"
-    )
 
     def change_active_status(e: ft.ControlEvent):
         data = e.control.data.split("_")
@@ -1880,8 +2013,8 @@ def main(page: ft.Page):
     )
 
     button_login = ft.FilledButton("Войти", width=250, on_click=lambda _: login(),
-                                     disabled=False, height=50,
-                                     icon=ft.icons.KEYBOARD_ARROW_RIGHT_ROUNDED)
+                                   disabled=False, height=50,
+                                   icon=ft.icons.KEYBOARD_ARROW_RIGHT_ROUNDED)
 
     login_col = ft.Column(
         controls=[
@@ -1949,36 +2082,41 @@ def main(page: ft.Page):
         else:
             remaining_children_traffic.append(e.control.data)
 
-    def update_modulecheck(mentor_id, module_name):
-        query = "SELECT name from crodconnect.mentors WHERE id = %s"
-        mentor_name = make_db_request(query, (mentor_id,))['name']
+    def update_modulecheck():
+
+        module_check_info = page.session.get('modulecheck_info')
+        print(module_check_info)
+        module, mentor = module_check_info['module'], module_check_info['mentor']
 
         if remaining_children_traffic:
             text = ""
-            module_traffic_col.controls[2].controls.clear()
-            for child_id in remaining_children_traffic:
-                query = "SELECT * FROM crodconnect.children WHERE id = %s"
-                child = make_db_request(query, (child_id,))
-                module_traffic_col.controls[2].controls.append(
+            module_traffic_col.controls.clear()
+            for child in remaining_children_traffic:
+                module_traffic_col.controls.append(
                     ft.Container(
                         ft.Row(
                             [
-                                ft.Container(ft.Text(child['name'], size=18, weight=ft.FontWeight.W_300, width=300), expand=True),
-                                ft.Checkbox(data=child['id'], on_change=modulecheck_checkbox_changed)
+                                ft.Container(ft.Text(child['name'], size=16, weight=ft.FontWeight.W_200, width=300), expand=True),
+                                ft.Checkbox(data=child, on_change=modulecheck_checkbox_changed)
                             ]
-                        ),
-                        data=""
+                        )
                     )
                 )
-                module_traffic_col.controls[2].controls.append(ft.Divider(thickness=1))
                 text += f"({child['group_num']}) {child['name']}\n"
 
+            module_traffic_col.controls.append(
+                ft.Row(
+                    [
+                        ft.FilledButton(text="Сохранить", icon=ft.icons.SAVE, on_click=lambda _: update_modulecheck())
+                    ],
+                    alignment=ft.MainAxisAlignment.END
+                )
+            )
             open_sb(f"Осталось отметить: {len(remaining_children_traffic)}")
-            message_text = f"*Посещаемость*" \
-                           f"\n\nМодуль: *{module_name}*" \
-                           f"\nСтатус: *не все 🏃*\n" \
+            message_text = f"\n\n*Посещаемость «{module['name']}»*" \
+                           f"\n\n⚠️ Пришли не все:\n" \
                            f"{text}" \
-                           f"\nОтметил: *{mentor_name}*"
+                           f"\n*🕵️ {mentor['name']}*"
 
         else:
             page.controls.clear()
@@ -1989,10 +2127,9 @@ def main(page: ft.Page):
             )
             dlg_info.open(action_btn_visible=False)
 
-            message_text = f"*Посещаемость*" \
-                           f"\n\nМодуль: *{module_name}*" \
-                           f"\nСтатус: *все дети на месте ✅*" \
-                           f"\n\nОтметил: *{mentor_name}*"
+            message_text = f"\n\n*Посещаемость «{module['name']}»*" \
+                           f"\n\n✅ Все дети на месте" \
+                           f"\n\n🕵️ {mentor['name']}"
 
         send_telegam_message(os.getenv('ID_GROUP_MAIN'), message_text)
         page.update()
@@ -2099,54 +2236,12 @@ def main(page: ft.Page):
                 )
                 dlg_info.open(action_btn_visible=admin)
 
-    def get_modulecheck(mentor_id: str, module_id: str):
-        page.scroll = ft.ScrollMode.HIDDEN
-        page.appbar = None
-        dlg_loading.loading_text = "Загрузка"
-        dlg_loading.open()
+    def goto_modulecheck(e: ft.ControlEvent):
+        data = page.session.get('modulecheck_info')
+        data['module'] = e.control.data['module']
+        page.session.set('modulecheck_info', data)
 
-        query = "SELECT name FROM crodconnect.modules WHERE id = %s"
-        module_info = make_db_request(query, (module_id,))
-
-        query = "SELECT * FROM crodconnect.children WHERE id IN (SELECT child_id FROM crodconnect.modules_records WHERE module_id = %s)"
-        children_list = make_db_request(query, (module_id,))
-        if children_list is not None:
-
-            children_list_col = ft.Column(width=600, scroll=ft.ScrollMode.HIDDEN)
-            children_list.sort(key=lambda el: el['name'])
-            for child in children_list:
-                remaining_children_traffic.append(child['id'])
-                children_list_col.controls.append(
-                    ft.Container(
-                        ft.Row(
-                            [
-                                ft.Container(ft.Text(child['name'], size=18, weight=ft.FontWeight.W_300, width=300), expand=True),
-                                ft.Checkbox(data=child['id'], on_change=modulecheck_checkbox_changed)
-                            ]
-                        ),
-                        data=""
-                    )
-                )
-                children_list_col.controls.append(ft.Divider(thickness=1))
-
-            module_traffic_col.controls = [
-                ft.Card(
-                    ft.Container(
-                        content=ft.ListTile(
-                            title=ft.Text(f"Проверка посещаемости", size=16),
-                            subtitle=ft.Text(f"{module_info['name']}", size=20, weight=ft.FontWeight.W_400),
-                        )
-                    )
-                ),
-                ft.Divider(thickness=1),
-                children_list_col,
-                ft.Row(
-                    [ft.FilledTonalButton(text="Отправить", icon=ft.icons.SEND, on_click=lambda _: update_modulecheck(mentor_id, module_info['name']))],
-                    alignment=ft.MainAxisAlignment.END
-                )
-            ]
-            page.add(module_traffic_col)
-            dlg_loading.close()
+        change_screen("module_check")
 
     page.drawer = ft.NavigationDrawer(
         controls=[
@@ -2266,7 +2361,7 @@ def main(page: ft.Page):
         page.window_width = 377
         page.window_height = 768
         page.route = "/"
-        # page.route = "/modulecheck?mentor_id=26&module_id=1&initiator=409801981&signature=2f686ce6a26f9d7da3b8640d41e263de509a480d5712d8a6783996c7e9317f45"
+        page.route = "/modulecheck?mentor_id=38&initiator=409801981&signature=cdd73b88a2cd8b8079c1fbe9f91ce338ccc05ebc5dfe5e3a89737c36ea3b63b3"
         # page.route = "/showqr/mentor?target=children&value=3&initiator=409801981&signature=654962104fc3627e1bae115b3bb54255cd9338021de9d03cb7c5db5c858bf055"
         # page.route = "/showqr/admin?initiator=409801981"
 
@@ -2286,9 +2381,13 @@ def main(page: ft.Page):
                 change_screen("login")
 
         elif url_path[0] == "modulecheck":
-            mentor_id, module_id, initiator, sign = url_params['mentor_id'][0], url_params['module_id'][0], url_params['initiator'][0], url_params['signature'][0]
-            if check_url(sign, f"modulecheck_{initiator}_{mentor_id}_{module_id}"):
-                get_modulecheck(mentor_id, module_id)
+            mentor_id, initiator, sign = url_params['mentor_id'][0], url_params['initiator'][0], url_params['signature'][0]
+            if check_url(sign, f"modulecheck_{initiator}_{mentor_id}"):
+                query = "SELECT * FROM crodconnect.mentors WHERE id = %s"
+                mentor = make_db_request(query, (mentor_id,))
+                if db.result['status'] == 'ok':
+                    page.session.set('modulecheck_info', {'mentor': mentor})
+                    change_screen("module_check_start")
 
         elif url_path[0] == "showqr":
             initiator = url_params['initiator'][0]
