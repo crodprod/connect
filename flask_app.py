@@ -4,6 +4,7 @@ import platform
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 
+from database import MySQL
 from flet_elements.telegram import send_telegam_message
 
 app = Flask(__name__)
@@ -14,6 +15,14 @@ else:
     env_path = r"/root/crod/.env"
 load_dotenv(dotenv_path=env_path)
 
+db = MySQL(
+    host=os.getenv('DB_HOST'),
+    port=os.getenv('DB_PORT'),
+    user=os.getenv('DB_USER'),
+    password=os.getenv('DB_PASSWORD'),
+    db_name=os.getenv('DB_NAME')
+)
+
 
 @app.route('/addticket', methods=['POST'])
 def add_ticket():
@@ -21,12 +30,36 @@ def add_ticket():
 
     ticket_data['caption'] = 'отсутствует' if not ticket_data['caption'] else ticket_data['caption']
     ticket_data['file'] = 'отсутствует' if not ticket_data['file'] else f"[открыть]({ticket_data['file']})"
+    user_tid = ticket_data['ticket_id'].split('-')[0]
+
+    db.connect()
+    query = """
+                SELECT 'children' AS status, * FROM crodconnect.children WHERE telegram_id = %s
+                UNION ALL
+                SELECT 'teachers' AS status, * FROM crodconnect.teachers WHERE telegram_id = %s
+                UNION ALL
+                SELECT 'mentors' AS status, * FROM crodconnect.mentors WHERE telegram_id = %s
+                UNION ALL 
+                SELECT 'admins' AS status, * FROM crodconnect.admins WHERE telegram_id = %s
+                LIMIT 1;
+                """
+
+    response = db.execute(query, (user_tid, user_tid, user_tid, user_tid,))
+    db.disconnect()
+
+    if db.result['status'] == 'ok':
+        if response is None:
+            user = "Информация в системе отсутствует"
+        else:
+            user = f"{response['name']}\nСтатус: {response['status']}"
+    else:
+        user = "Не удалось получить информацию о пользователе"
 
     send_telegam_message(
         tID=os.getenv('ID_GROUP_ERRORS'),
         message_text=f"*Обращение от пользователя*"
-                     f"\n\n*Пользователь:* {ticket_data['ticket_id']}"
-                     f"\n*Проблема:* {ticket_data['topic']}"
+                     f"\n\n*Пользователь:* \n{user}"
+                     f"\n\n*Проблема:* {ticket_data['topic']}"
                      f"\n*Описание:* {ticket_data['caption']}"
                      f"\n*Файл:* {ticket_data['file']}"
 
