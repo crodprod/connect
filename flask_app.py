@@ -43,14 +43,17 @@ def add_ticket():
             SELECT 'admins' AS post_, name, status FROM crodconnect.admins WHERE telegram_id = %s;
                 """
 
-    response = db.execute(query, (user_tid, user_tid, user_tid, user_tid,))
-    db.disconnect()
+    if db['status'] == 'ok':
+        response = db.execute(query, (user_tid, user_tid, user_tid, user_tid,))
+        db.disconnect()
 
-    if db.result['status'] == 'ok':
-        if response is None:
-            user = "Информация в системе отсутствует"
+        if db.result['status'] == 'ok':
+            if response is None:
+                user = "Информация в системе отсутствует"
+            else:
+                user = f"{response['name']}\nРоль: {response['post_']}\nСтатус: {response['status']}"
         else:
-            user = f"{response['name']}\nРоль: {response['post_']}\nСтатус: {response['status']}"
+            user = "Не удалось получить информацию о пользователе"
     else:
         user = "Не удалось получить информацию о пользователе"
 
