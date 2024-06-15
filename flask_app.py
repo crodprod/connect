@@ -61,11 +61,11 @@ def add_ticket():
 
     send_telegam_message(
         tID=os.getenv('ID_GROUP_ERRORS'),
-        message_text=f"*Обращение от пользователя*"
-                     f"\n\n*Пользователь:* \n{user}"
-                     f"\n\n*Проблема:* {ticket_data['topic']}"
-                     f"\n*Описание:* {ticket_data['caption']}"
-                     f"\n*Файл:* {ticket_data['file']}"
+        message_text=f"📨 *Обращение от пользователя №{ticket_data['ticket_id']}*"
+                     f"\n\n🙋‍♂️ *Пользователь:* \n{user}"
+                     f"\n\n⚠️ *Проблема:* {ticket_data['topic']}"
+                     f"\n📃 *Описание:* {ticket_data['caption']}"
+                     f"\n📂 *Файл:* {ticket_data['file']}"
 
                      f"\n\n[Открыть ответ]({ticket_data['answer_link']})"
     )
