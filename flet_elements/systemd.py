@@ -93,6 +93,8 @@ def make_update(service_name):
         f"/usr/bin/git pull origin main && "
         f"source venv/bin/activate && "
         f"pip3 install -r requirements.txt && "
+        f"deactivate && "
+        f"cd && "
         f"/usr/bin/systemctl restart {service_name}.service"
     )
 
