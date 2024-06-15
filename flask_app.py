@@ -7,6 +7,7 @@ from flask import Flask, request, jsonify
 from database import MySQL
 from flet_elements.telegram import send_telegam_message
 
+
 app = Flask(__name__)
 
 if platform.system() == "Windows":
@@ -44,11 +45,11 @@ def add_ticket():
                 """
 
     if db.result['status'] == 'ok':
-        response = db.execute(query, (user_tid, user_tid, user_tid, user_tid,))
+        db.execute(query, (user_tid, user_tid, user_tid, user_tid,))
         db.disconnect()
 
         if db.result['status'] == 'ok':
-            print('1111111', response)
+            response = db.data
             if response is None:
                 user = "Информация в системе отсутствует"
             else:
