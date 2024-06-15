@@ -91,10 +91,7 @@ def make_update(service_name):
     command = (
         f"cd {source} && "
         f"/usr/bin/git pull origin main && "
-        f"source venv/bin/activate && "
-        f"pip3 install -r requirements.txt && "
-        f"deactivate && "
-        f"cd && "
+        f"bash -c 'source venv/bin/activate && pip3 install -r requirements.txt' && "
         f"/usr/bin/systemctl restart {service_name}.service"
     )
 
