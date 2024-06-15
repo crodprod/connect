@@ -34,14 +34,13 @@ def add_ticket():
 
     db.connect()
     query = """
-                SELECT 'children' AS status, * FROM crodconnect.children WHERE telegram_id = %s
-                UNION ALL
-                SELECT 'teachers' AS status, * FROM crodconnect.teachers WHERE telegram_id = %s
-                UNION ALL
-                SELECT 'mentors' AS status, * FROM crodconnect.mentors WHERE telegram_id = %s
-                UNION ALL 
-                SELECT 'admins' AS status, * FROM crodconnect.admins WHERE telegram_id = %s
-                LIMIT 1;
+            SELECT 'children' AS post_, name, status FROM crodconnect.children WHERE telegram_id = %s
+            UNION
+            SELECT 'teachers' AS post_, name, status FROM crodconnect.teachers WHERE telegram_id = %s
+            UNION
+            SELECT 'mentors' AS post_, name, status FROM crodconnect.mentors WHERE telegram_id = %s
+            UNION 
+            SELECT 'admins' AS post_, name, status FROM crodconnect.admins WHERE telegram_id = %s;
                 """
 
     response = db.execute(query, (user_tid, user_tid, user_tid, user_tid,))
@@ -51,7 +50,7 @@ def add_ticket():
         if response is None:
             user = "Информация в системе отсутствует"
         else:
-            user = f"{response['name']}\nСтатус: {response['status']}"
+            user = f"{response['name']}\nРоль: {response['post_']}\nСтатус: {response['status']}"
     else:
         user = "Не удалось получить информацию о пользователе"
 
