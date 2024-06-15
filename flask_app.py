@@ -18,7 +18,6 @@ load_dotenv(dotenv_path=env_path)
 @app.route('/addticket', methods=['POST'])
 def add_ticket():
     ticket_data = request.json['params']
-    print('1111111', ticket_data)
 
     ticket_data['caption'] = 'отсутствует' if not ticket_data['caption'] else ticket_data['caption']
     ticket_data['file'] = 'отсутствует' if not ticket_data['file'] else f"[открыть]({ticket_data['file']})"
@@ -26,9 +25,10 @@ def add_ticket():
     send_telegam_message(
         tID=os.getenv('ID_GROUP_ERRORS'),
         message_text=f"*Обращение от пользователя*"
-                     f"\n\n*Пользователь:* {123}"
+                     f"\n\n*Пользователь:* {ticket_data['ticket_id']}"
                      f"\n*Проблема:* {ticket_data['topic']}"
                      f"\n*Описание:* {ticket_data['caption']}"
+                     f"\n*Файл:* {ticket_data['file']}"
 
                      f"\n\n[Открыть ответ]({ticket_data['answer_link']})"
     )
