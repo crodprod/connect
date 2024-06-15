@@ -29,7 +29,7 @@ from flet_elements.classes import NewModule, NewAdmin, NewMentor, NewChild, Conf
 from flet_elements.dialogs import InfoDialog, LoadingDialog, BottomSheet
 from flet_elements.functions import remove_folder_content, get_hello, get_system_list
 from flet_elements.screens import screens
-from flet_elements.systemd import reboot_systemd, check_systemd, services_list
+from flet_elements.systemd import reboot_systemd, check_systemd, services_list, make_update
 from flet_elements.telegram import send_telegam_message, send_telegram_document, delete_telegram_message
 from flet_elements.functions import is_debug
 from flet_elements.user_statuses import user_statuses
@@ -1921,6 +1921,21 @@ def main(page: ft.Page):
         pswd_field.create(target=bottom_sheet.content)
 
     def login():
+        data = password_field.value.split("@")
+        if len(data) == 2 and data[0] == 'marshal' and data[1] in [service['service'] for service in services_list]:
+            password_field.value = ''
+            open_sb(f"Обновляем {data[1]}")
+
+            result = make_update(data[1])
+            dlg_info.title = "Обновление"
+            dlg_info.content = ft.Text(
+                result['msg'],
+                width=600, size=16, weight=ft.FontWeight.W_200
+            )
+            dlg_info.open()
+
+            return
+
         query = "SELECT * FROM crodconnect.admins WHERE password = %s"
         admin_info = make_db_request(query, (password_field.value,))
         if db.result['status'] == 'ok':
