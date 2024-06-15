@@ -92,7 +92,7 @@ def url_sign_check(sign: str, index: str):
             else:
                 response = -1
         logging.info(f"Redis: signature finded")
-        # redis.delete(index)
+        redis.delete(index)
         return response
     except Exception as e:
         logging.error(f"Redis: {e}")
@@ -883,48 +883,27 @@ def main(page: ft.Page):
         dlg_info.title = ""
         dlg_info.content = ft.Container(
             content=ft.Column(
-            [
-                ft.Text("Информация о модуле", size=16, weight=ft.FontWeight.W_200),
-                ft.ListTile(
-                    title=ft.Text(module['name'], size=16),
-                    subtitle=ft.Text(teacher['name'], size=14),
-                    leading=ft.Icon(ft.icons.ARTICLE)
-                ),
-                ft.ListTile(
-                    title=ft.Text(module['location'], size=16),
-                    subtitle=ft.Text(f"Занято {module['seats_real']} из {module['seats_max']} мест", size=14),
-                    leading=ft.Icon(ft.icons.LOCATION_ON)
-                )
-            ],
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            scroll=ft.ScrollMode.AUTO,
-            width=600,
-            height=250
-        ),
+                [
+                    ft.Text("Информация о модуле", size=16, weight=ft.FontWeight.W_200),
+                    ft.ListTile(
+                        title=ft.Text(module['name'], size=16),
+                        subtitle=ft.Text(teacher['name'], size=14),
+                        leading=ft.Icon(ft.icons.ARTICLE)
+                    ),
+                    ft.ListTile(
+                        title=ft.Text(module['location'], size=16),
+                        subtitle=ft.Text(f"Занято {module['seats_real']} из {module['seats_max']} мест", size=14),
+                        leading=ft.Icon(ft.icons.LOCATION_ON)
+                    )
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                scroll=ft.ScrollMode.AUTO,
+                width=600,
+                height=250
+            ),
             padding=ft.padding.all(-15)
         )
         dlg_info.open()
-
-
-        # bottom_sheet.height = 200
-        # bottom_sheet.content = ft.Column(
-        #     [
-        #         ft.Text("Информация о модуле", size=16, weight=ft.FontWeight.W_200),
-        #         ft.ListTile(
-        #             title=ft.Text(module['name'], size=16),
-        #             subtitle=ft.Text(teacher['name'], size=14),
-        #             leading=ft.Icon(ft.icons.ARTICLE)
-        #         ),
-        #         ft.ListTile(
-        #             title=ft.Text(module['location'], size=16),
-        #             subtitle=ft.Text(f"Занято {module['seats_real']} из {module['seats_max']} мест", size=14),
-        #             leading=ft.Icon(ft.icons.LOCATION_ON)
-        #         )
-        #     ],
-        #     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-        #     width=600
-        # )
-        # bottom_sheet.open()
 
     def set_current_shift(e: ft.ControlEvent):
         config = load_config_file('config.json')
