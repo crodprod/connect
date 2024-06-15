@@ -92,7 +92,7 @@ def url_sign_check(sign: str, index: str):
             else:
                 response = -1
         logging.info(f"Redis: signature finded")
-        redis.delete(index)
+        # redis.delete(index)
         return response
     except Exception as e:
         logging.error(f"Redis: {e}")
@@ -880,8 +880,9 @@ def main(page: ft.Page):
         data = e.control.data
         module, teacher = data['module'], data['teacher']
 
-        bottom_sheet.height = 200
-        bottom_sheet.content = ft.Column(
+        dlg_info.title = ""
+        dlg_info.content = ft.Container(
+            content=ft.Column(
             [
                 ft.Text("Информация о модуле", size=16, weight=ft.FontWeight.W_200),
                 ft.ListTile(
@@ -896,9 +897,34 @@ def main(page: ft.Page):
                 )
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            width=600
+            scroll=ft.ScrollMode.AUTO,
+            width=600,
+            height=250
+        ),
+            padding=ft.padding.all(-15)
         )
-        bottom_sheet.open()
+        dlg_info.open()
+
+
+        # bottom_sheet.height = 200
+        # bottom_sheet.content = ft.Column(
+        #     [
+        #         ft.Text("Информация о модуле", size=16, weight=ft.FontWeight.W_200),
+        #         ft.ListTile(
+        #             title=ft.Text(module['name'], size=16),
+        #             subtitle=ft.Text(teacher['name'], size=14),
+        #             leading=ft.Icon(ft.icons.ARTICLE)
+        #         ),
+        #         ft.ListTile(
+        #             title=ft.Text(module['location'], size=16),
+        #             subtitle=ft.Text(f"Занято {module['seats_real']} из {module['seats_max']} мест", size=14),
+        #             leading=ft.Icon(ft.icons.LOCATION_ON)
+        #         )
+        #     ],
+        #     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        #     width=600
+        # )
+        # bottom_sheet.open()
 
     def set_current_shift(e: ft.ControlEvent):
         config = load_config_file('config.json')
@@ -2361,7 +2387,7 @@ def main(page: ft.Page):
         page.window_width = 377
         page.window_height = 768
         page.route = "/"
-        page.route = "/modulecheck?mentor_id=38&initiator=409801981&signature=cdd73b88a2cd8b8079c1fbe9f91ce338ccc05ebc5dfe5e3a89737c36ea3b63b3"
+        page.route = "/modulecheck?mentor_id=38&initiator=409801981&signature=44f3aea7222504df1de105e07610ffd07b43a0aa7e2f7af555d233d47691e799"
         # page.route = "/showqr/mentor?target=children&value=3&initiator=409801981&signature=654962104fc3627e1bae115b3bb54255cd9338021de9d03cb7c5db5c858bf055"
         # page.route = "/showqr/admin?initiator=409801981"
 
