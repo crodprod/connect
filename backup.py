@@ -1,7 +1,5 @@
 import platform
 
-from dotenv import load_dotenv
-
 import yadiskapi
 import logging
 import subprocess
