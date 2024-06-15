@@ -394,6 +394,16 @@ async def deep_linking(message: Message, command: CommandObject):
             )
 
 
+@dp.message(Command("help"))
+async def cmd_start(message: types.Message):
+    ticket_id = f"{message.from_user.id}-{datetime.datetime.now().strftime('%Y%m%d%H%M')}"
+    await message.answer(
+        text=f"Если у вас возникли какие-либо проблемы или ошибки во время работы с ботом, сообщите о них нам с помощью формы."
+             f"\n\n1. Скопируйте свой идентификатор обращения: {markdown.hpre(ticket_id)}"
+             f"\n\n2. Перейдите {markdown.html_decoration.link('по этой ссылке', 'https://forms.yandex.ru/u/666da39343f74f26436f8712/')} вставьте скопированный идентификатор и опишите проблему, с которой столкнулись."
+    )
+
+
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     if statuses['can_respond']:
