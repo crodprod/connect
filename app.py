@@ -1920,21 +1920,43 @@ def main(page: ft.Page):
 
         pswd_field.create(target=bottom_sheet.content)
 
+    def goto_update_service(e: ft.ControlEvent):
+        bottom_sheet.close()
+
+        service = e.control.data
+        open_sb(f"Обновляем {service}")
+
+        result = make_update(service)
+        dlg_info.title = "Обновление"
+        dlg_info.content = ft.Text(
+            result['msg'],
+            width=600, size=16, weight=ft.FontWeight.W_200
+        )
+        dlg_info.open()
+
     def login():
-        data = password_field.value.split("@")
-        if len(data) == 2 and data[0] == 'marshal' and data[1] in [service['service'] for service in services_list]:
+        if password_field.value.strip() == "remote@update":
             password_field.value = ''
-            open_sb(f"Обновляем {data[1]}")
 
-            result = make_update(data[1])
-            dlg_info.title = "Обновление"
-            dlg_info.content = ft.Text(
-                result['msg'],
-                width=600, size=16, weight=ft.FontWeight.W_200
+            col = ft.Column(
+                [
+                    ft.Text("Выберите сервис для обновления", size=16, weight=ft.FontWeight.W_200),
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER, width=600
             )
-            dlg_info.open()
 
-            return
+            for service in services_list:
+                col.controls.append(
+                    ft.ListTile(
+                        leading=ft.Icon(ft.icons.ANDROID),
+                        title=ft.Text(service['title']),
+                        data=service['service'],
+                        on_click=goto_update_service
+                    )
+                )
+
+            bottom_sheet.content = col
+            bottom_sheet.open()
 
         query = "SELECT * FROM crodconnect.admins WHERE password = %s"
         admin_info = make_db_request(query, (password_field.value,))
