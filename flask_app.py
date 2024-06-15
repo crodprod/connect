@@ -50,8 +50,7 @@ def add_ticket():
 
         if db.result['status'] == 'ok':
             response = db.data
-            print(response)
-            if response is None:
+            if not response:
                 user = "Информация в системе отсутствует"
             else:
                 user = f"{response['name']}\nРоль: {response['post_']}\nСтатус: {response['status']}"
