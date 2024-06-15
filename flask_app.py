@@ -43,7 +43,7 @@ def add_ticket():
             SELECT 'admins' AS post_, name, status FROM crodconnect.admins WHERE telegram_id = %s;
                 """
 
-    if db['status'] == 'ok':
+    if db.result['status'] == 'ok':
         response = db.execute(query, (user_tid, user_tid, user_tid, user_tid,))
         db.disconnect()
 
