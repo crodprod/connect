@@ -21,7 +21,7 @@ errors = {
     },
 }
 
-os.environ['FLET_WEB_APP_PATH'] = '/connect'
+os.environ['FLET_WEB_APP_PATH'] = '/errors'
 
 
 def main(page: ft.Page):
