@@ -7,15 +7,15 @@ import flet as ft
 logging.basicConfig(level=logging.INFO)
 
 errors = {
-    '/404': {
+    '404': {
         'text': "Такой страницы не существует",
         'icon': ft.icons.PLAYLIST_REMOVE
     },
-    '/502': {
+    '502': {
         'text': "Сервис временно недоступен, обновите страницу через несколько минут",
         'icon': ft.icons.HOURGLASS_BOTTOM
     },
-    '/405': {
+    '405': {
         'text': "Такой запрос не поддерживается",
         'icon': ft.icons.CONNECT_WITHOUT_CONTACT
     },
@@ -42,7 +42,7 @@ def main(page: ft.Page):
     url = urlparse(page.route)
     url_path = url.path.split('/')[1:]
 
-    logging.info(url.path, url_path[0])
+    # logging.info(url.path, url_path[0])
     if url_path[0] not in errors.keys():
         text = "Неизвестная ошибка"
         icon = ft.icons.ERROR
