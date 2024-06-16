@@ -1,7 +1,10 @@
+import logging
 import os
 from urllib.parse import urlparse, parse_qs
 
 import flet as ft
+
+logging.basicConfig()
 
 errors = {
     '404': {
