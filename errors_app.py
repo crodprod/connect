@@ -7,15 +7,15 @@ import flet as ft
 logging.basicConfig(level=logging.INFO)
 
 errors = {
-    '404': {
+    '/404': {
         'text': "Такой страницы не существует",
         'icon': ft.icons.PLAYLIST_REMOVE
     },
-    '502': {
+    '/502': {
         'text': "Сервис временно недоступен, обновите страницу через несколько минут",
         'icon': ft.icons.HOURGLASS_BOTTOM
     },
-    '405': {
+    '/405': {
         'text': "Такой запрос не поддерживается",
         'icon': ft.icons.CONNECT_WITHOUT_CONTACT
     },
