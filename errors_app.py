@@ -42,7 +42,7 @@ def main(page: ft.Page):
     url = urlparse(page.route)
     url_path = url.path.split('/')[1:]
 
-    print(url_path)
+    logging.info(url.path, url_path[0])
     if url_path[0] not in errors.keys():
         text = "Неизвестная ошибка"
         icon = ft.icons.ERROR
